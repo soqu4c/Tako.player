@@ -39,6 +39,16 @@
     <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.4 2.5.2.3.6.3.8 0 .8-1.4 2.3-2.5 4.4-2.5 3.7 0 5.8 3.9 4.3 7.3C18.5 16.4 12 21 12 21z"/></symbol>
+    <symbol id="i-brush" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h9l3-3"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="1.5"/></symbol>
+    <symbol id="i-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="7.5"/></symbol>
+    <symbol id="i-type" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
   </defs>
 </svg>
@@ -93,6 +103,10 @@
               <button id="busy-cancel" class="btn small">Отмена</button>
             </div>
           </div>
+          <div id="draw-layer" hidden>
+            <canvas id="draw-canvas"></canvas>
+            <input id="draw-text" spellcheck="false" placeholder="Текст…" hidden>
+          </div>
           <div id="drop" hidden><div><svg class="i"><use href="#i-plus"/></svg>Отпустите, чтобы открыть</div></div>
         </div>
 
@@ -129,6 +143,7 @@
               </select>
               <span class="divider"></span>
               <button id="btn-trim" class="icon" title="Обрезка (T)"><svg class="i"><use href="#i-scissors"/></svg></button>
+              <button id="btn-draw" class="icon" title="Рисовать на кадре (D)"><svg class="i"><use href="#i-brush"/></svg></button>
               <button id="btn-shot" class="icon" title="Сохранить кадр (C)"><svg class="i"><use href="#i-camera"/></svg></button>
               <button id="btn-full" class="icon" title="Полный экран (F)"><svg class="i"><use href="#i-full"/></svg></button>
             </div>
@@ -168,6 +183,33 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div id="draw-bar" hidden>
+          <div class="draw-group" id="draw-tools">
+            <button data-tool="pen" class="icon sm" title="Кисть (B)"><svg class="i"><use href="#i-brush"/></svg></button>
+            <button data-tool="marker" class="icon sm" title="Маркер — полупрозрачный, чтобы выделять (H)"><svg class="i"><use href="#i-marker"/></svg></button>
+            <button data-tool="arrow" class="icon sm" title="Стрелка (A)"><svg class="i"><use href="#i-arrow"/></svg></button>
+            <button data-tool="rect" class="icon sm" title="Рамка (R)"><svg class="i"><use href="#i-square"/></svg></button>
+            <button data-tool="ellipse" class="icon sm" title="Овал (E)"><svg class="i"><use href="#i-circle"/></svg></button>
+            <button data-tool="text" class="icon sm" title="Текст — нажмите на кадр и пишите (T)"><svg class="i"><use href="#i-type"/></svg></button>
+          </div>
+          <span class="divider"></span>
+          <div class="draw-group" id="draw-colors"></div>
+          <span class="divider"></span>
+          <div class="draw-group" id="draw-sizes"></div>
+          <span class="divider"></span>
+          <div class="draw-group">
+            <button id="draw-undo" class="icon sm" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
+            <button id="draw-redo" class="icon sm" title="Повторить (Ctrl+Y)"><svg class="i"><use href="#i-redo"/></svg></button>
+            <button id="draw-clear" class="icon sm" title="Стереть всё (Delete)"><svg class="i"><use href="#i-trash"/></svg></button>
+          </div>
+          <span class="divider"></span>
+          <div class="draw-group">
+            <button id="draw-copy" class="btn small" title="Скопировать картинку — вставьте в Discord или Telegram через Ctrl+V (Ctrl+C)"><svg class="i"><use href="#i-copy"/></svg>Копировать</button>
+            <button id="draw-save" class="btn small accent" title="Сохранить PNG в исходном разрешении (Ctrl+S)"><svg class="i"><use href="#i-download"/></svg>Сохранить</button>
+            <button id="draw-close" class="icon sm" title="Закрыть — рисунок не сохранится (Esc)"><svg class="i"><use href="#i-x"/></svg></button>
           </div>
         </div>
 
@@ -335,6 +377,7 @@
     <tr><td><kbd>X</kbd></td><td>Закрыть обрезку и сбросить выделение</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>Выйти из полного экрана → закрыть обрезку → закрыть видео</td></tr>
     <tr><td><kbd>C</kbd></td><td>Сохранить кадр</td></tr>
+    <tr><td><kbd>D</kbd></td><td>Рисовать на кадре: <kbd>B</kbd> кисть, <kbd>H</kbd> маркер, <kbd>A</kbd> стрелка, <kbd>R</kbd> рамка, <kbd>E</kbd> овал, <kbd>T</kbd> текст, <kbd>1</kbd>–<kbd>3</kbd> толщина, <kbd>Ctrl+Z</kbd> отменить, <kbd>Ctrl+C</kbd> копировать, <kbd>Ctrl+S</kbd> сохранить</td></tr>
     <tr><td><kbd>F</kbd>, двойной клик</td><td>Полный экран</td></tr>
     <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл в открытой папке</td></tr>
     <tr><td><kbd>Ctrl+O</kbd></td><td>Открыть файлы</td></tr>

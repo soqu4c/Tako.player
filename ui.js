@@ -307,7 +307,7 @@ function poke() {
   clearTimeout(idleTimer);
   if (!settings.hideDelay) return;
   idleTimer = setTimeout(() => {
-    const keep = overControls || video.paused || !state.info || !state.videoStream || currentView !== 'player'
+    const keep = overControls || video.paused || !state.info || !state.videoStream || currentView !== 'player' || draw.on
       || document.body.classList.contains('trim-open') || document.querySelector('dialog[open]');
     if (!keep) document.body.classList.add('idle');
   }, settings.hideDelay * 1000);
@@ -868,6 +868,322 @@ $('#lib-sort').addEventListener('change', e => {
   renderLibrary();
   e.target.blur();
 });
+
+// ---------- drawing on a paused frame
+//
+// Shapes are stored in the video's own pixels, so they stay put at any window size and are
+// painted at full resolution over the exact frame (taken by ffmpeg) when saved or copied.
+
+const DRAW_COLORS = ['#ff4d4d', '#ffd23f', '#3ddc84', '#3fb8ff', '#ffffff', '#111111'];
+const DRAW_WIDTHS = [0.004, 0.008, 0.016]; // line width as a share of the frame height
+const DRAW_FONTS = [0.035, 0.05, 0.075];
+const dCanvas = $('#draw-canvas');
+const dctx = dCanvas.getContext('2d');
+const dText = $('#draw-text');
+const draw = { on: false, tool: 'pen', color: DRAW_COLORS[0], size: 1, shapes: [], past: [], future: [], cur: null };
+
+function paintShape(ctx, s, k) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ctx.fillStyle = s.color;
+  ctx.lineWidth = s.width * k;
+  if (s.tool === 'marker') ctx.globalAlpha = 0.4;
+  if (s.tool === 'pen' || s.tool === 'marker') {
+    ctx.beginPath();
+    s.points.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)));
+    if (s.points.length === 1) ctx.lineTo(s.points[0][0] * k + 0.1, s.points[0][1] * k);
+    ctx.stroke();
+  } else if (s.tool === 'arrow') {
+    const [x1, y1, x2, y2] = [s.x1 * k, s.y1 * k, s.x2 * k, s.y2 * k];
+    const a = Math.atan2(y2 - y1, x2 - x1);
+    const head = s.width * k * 4.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - Math.cos(a) * head * 0.6, y2 - Math.sin(a) * head * 0.6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - head * Math.cos(a - 0.45), y2 - head * Math.sin(a - 0.45));
+    ctx.lineTo(x2 - head * Math.cos(a + 0.45), y2 - head * Math.sin(a + 0.45));
+    ctx.closePath();
+    ctx.fill();
+  } else if (s.tool === 'rect') {
+    ctx.strokeRect(s.x1 * k, s.y1 * k, (s.x2 - s.x1) * k, (s.y2 - s.y1) * k);
+  } else if (s.tool === 'ellipse') {
+    ctx.beginPath();
+    ctx.ellipse((s.x1 + s.x2) / 2 * k, (s.y1 + s.y2) / 2 * k, Math.abs(s.x2 - s.x1) / 2 * k, Math.abs(s.y2 - s.y1) / 2 * k, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (s.tool === 'text') {
+    // A dark (or light, for black text) outline keeps text readable on any picture
+    const size = s.font * k;
+    ctx.font = `700 ${size}px "Segoe UI", sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.lineWidth = size / 7;
+    ctx.strokeStyle = s.color === '#111111' ? 'rgba(255, 255, 255, .85)' : 'rgba(0, 0, 0, .7)';
+    ctx.strokeText(s.text, s.x * k, s.y * k);
+    ctx.fillText(s.text, s.x * k, s.y * k);
+  }
+  ctx.restore();
+}
+
+function renderDrawing() {
+  dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+  for (const s of draw.shapes) paintShape(dctx, s, 1);
+  if (draw.cur) paintShape(dctx, draw.cur, 1);
+  $('#draw-undo').disabled = !draw.past.length;
+  $('#draw-redo').disabled = !draw.future.length;
+  $('#draw-clear').disabled = $('#draw-copy').disabled = $('#draw-save').disabled = !draw.shapes.length;
+}
+
+// Every change keeps the previous picture, so undo also brings back a cleared drawing
+function changeShapes(next) {
+  draw.past.push(draw.shapes);
+  draw.future = [];
+  draw.shapes = next;
+  renderDrawing();
+}
+
+function undoDraw() {
+  if (!draw.past.length) return;
+  draw.future.push(draw.shapes);
+  draw.shapes = draw.past.pop();
+  renderDrawing();
+}
+
+function redoDraw() {
+  if (!draw.future.length) return;
+  draw.past.push(draw.shapes);
+  draw.shapes = draw.future.pop();
+  renderDrawing();
+}
+
+// The canvas has the video's own size and is laid over the picture where object-fit put it
+function layoutDraw() {
+  if (!draw.on) return;
+  const st = $('#stage').getBoundingClientRect();
+  const sc = Math.min(st.width / dCanvas.width, st.height / dCanvas.height);
+  const w = dCanvas.width * sc;
+  const h = dCanvas.height * sc;
+  Object.assign(dCanvas.style, { left: (st.width - w) / 2 + 'px', top: (st.height - h) / 2 + 'px', width: w + 'px', height: h + 'px' });
+}
+new ResizeObserver(layoutDraw).observe($('#stage'));
+
+function canvasPoint(e) {
+  const r = dCanvas.getBoundingClientRect();
+  return [(e.clientX - r.left) * dCanvas.width / r.width, (e.clientY - r.top) * dCanvas.height / r.height];
+}
+
+function syncDrawBar() {
+  for (const b of $('#draw-tools').children) b.classList.toggle('on', b.dataset.tool === draw.tool);
+  for (const b of $('#draw-colors').children) b.classList.toggle('on', b.dataset.color === draw.color);
+  for (const b of $('#draw-sizes').children) b.classList.toggle('on', Number(b.dataset.size) === draw.size);
+  document.body.dataset.tool = draw.tool;
+}
+
+function setDrawTool(tool) {
+  commitText();
+  draw.tool = tool;
+  syncDrawBar();
+}
+
+DRAW_COLORS.forEach(c => {
+  const b = document.createElement('button');
+  b.className = 'draw-color';
+  b.dataset.color = c;
+  b.style.background = c;
+  b.onclick = () => {
+    draw.color = c;
+    dText.style.color = c;
+    syncDrawBar();
+  };
+  $('#draw-colors').append(b);
+});
+[0, 1, 2].forEach(i => {
+  const b = document.createElement('button');
+  b.className = 'draw-size';
+  b.dataset.size = i;
+  b.title = ['Тонкая линия (1)', 'Средняя линия (2)', 'Толстая линия (3)'][i];
+  const dot = document.createElement('i');
+  dot.style.width = dot.style.height = [5, 9, 14][i] + 'px';
+  b.append(dot);
+  b.onclick = () => {
+    draw.size = i;
+    syncDrawBar();
+  };
+  $('#draw-sizes').append(b);
+});
+for (const b of $('#draw-tools').children) b.onclick = () => setDrawTool(b.dataset.tool);
+
+dCanvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const [x, y] = canvasPoint(e);
+  if (draw.tool === 'text') {
+    e.preventDefault();
+    startText(x, y);
+    return;
+  }
+  commitText();
+  dCanvas.setPointerCapture(e.pointerId);
+  const width = dCanvas.height * DRAW_WIDTHS[draw.size] * (draw.tool === 'marker' ? 3 : 1);
+  const base = { tool: draw.tool, color: draw.color, width };
+  draw.cur = draw.tool === 'pen' || draw.tool === 'marker' ? { ...base, points: [[x, y]] } : { ...base, x1: x, y1: y, x2: x, y2: y };
+  renderDrawing();
+});
+dCanvas.addEventListener('pointermove', e => {
+  if (!draw.cur) return;
+  const [x, y] = canvasPoint(e);
+  if (draw.cur.points) draw.cur.points.push([x, y]);
+  else Object.assign(draw.cur, { x2: x, y2: y });
+  renderDrawing();
+});
+const endStroke = () => {
+  const s = draw.cur;
+  if (!s) return;
+  draw.cur = null;
+  // A click without dragging makes no arrow or frame
+  if (!s.points && Math.hypot(s.x2 - s.x1, s.y2 - s.y1) < dCanvas.height * 0.005) renderDrawing();
+  else changeShapes([...draw.shapes, s]);
+};
+dCanvas.addEventListener('pointerup', endStroke);
+dCanvas.addEventListener('pointercancel', endStroke);
+
+function startText(x, y) {
+  commitText();
+  const r = dCanvas.getBoundingClientRect();
+  const layer = $('#draw-layer').getBoundingClientRect();
+  const k = r.width / dCanvas.width;
+  const font = dCanvas.height * DRAW_FONTS[draw.size];
+  Object.assign(dText.dataset, { x, y, font, color: draw.color });
+  Object.assign(dText.style, {
+    left: r.left - layer.left + x * k + 'px',
+    top: r.top - layer.top + y * k + 'px',
+    fontSize: font * k + 'px',
+    color: draw.color,
+  });
+  dText.value = '';
+  dText.hidden = false;
+  setTimeout(() => dText.focus());
+}
+
+function commitText() {
+  if (dText.hidden) return;
+  const text = dText.value.trim();
+  dText.hidden = true;
+  if (!text) return;
+  const d = dText.dataset;
+  changeShapes([...draw.shapes, { tool: 'text', color: d.color, x: Number(d.x), y: Number(d.y), font: Number(d.font), text }]);
+}
+dText.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter') commitText();
+  if (e.key === 'Escape') {
+    dText.value = '';
+    commitText();
+  }
+});
+dText.addEventListener('blur', commitText);
+
+function openDraw() {
+  if (draw.on || !state.info || !state.videoStream || !video.videoWidth) return;
+  video.pause();
+  draw.on = true;
+  draw.shapes = [];
+  draw.past = [];
+  draw.future = [];
+  dCanvas.width = video.videoWidth;
+  dCanvas.height = video.videoHeight;
+  document.body.classList.add('drawing');
+  $('#draw-layer').hidden = $('#draw-bar').hidden = false;
+  syncDrawBar();
+  layoutDraw();
+  renderDrawing();
+  poke();
+}
+
+function closeDraw() {
+  if (!draw.on) return;
+  dText.hidden = true;
+  draw.on = false;
+  draw.cur = null;
+  document.body.classList.remove('drawing');
+  $('#draw-layer').hidden = $('#draw-bar').hidden = true;
+}
+
+function toggleDraw() {
+  if (draw.on) closeDraw();
+  else openDraw();
+}
+
+// The finished picture: the exact frame at its own resolution with the drawing on top
+async function composeDrawing() {
+  commitText();
+  const url = await api.grabFrame({ file: currentItem().path, time: video.currentTime });
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error('не удалось открыть кадр'));
+    img.src = url;
+  });
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  for (const s of draw.shapes) paintShape(ctx, s, c.width / dCanvas.width);
+  return c.toDataURL('image/png');
+}
+
+async function exportDrawing(kind) {
+  if (!draw.shapes.length && dText.hidden) return;
+  const btns = [$('#draw-copy'), $('#draw-save')];
+  btns.forEach(b => { b.disabled = true; });
+  try {
+    const data = await composeDrawing();
+    if (kind === 'copy') {
+      await api.copyImage(data);
+      toast('Картинка скопирована — вставьте её в Discord или Telegram через Ctrl+V');
+    } else {
+      const p = await api.saveImage({ data, file: currentItem().path, time: video.currentTime });
+      if (p) toast('Кадр с рисунком сохранён', 'Показать в папке', () => api.reveal(p));
+    }
+  } catch (e) {
+    toast('Не получилось: ' + cleanErr(e));
+  } finally {
+    renderDrawing();
+  }
+}
+
+$('#btn-draw').onclick = toggleDraw;
+$('#draw-undo').onclick = undoDraw;
+$('#draw-redo').onclick = redoDraw;
+$('#draw-clear').onclick = () => { if (draw.shapes.length) changeShapes([]); };
+$('#draw-copy').onclick = () => exportDrawing('copy');
+$('#draw-save').onclick = () => exportDrawing('save');
+$('#draw-close').onclick = closeDraw;
+video.addEventListener('play', closeDraw);
+const loadIndexBeforeDraw = loadIndex;
+loadIndex = (...args) => {
+  closeDraw();
+  return loadIndexBeforeDraw(...args);
+};
+
+// While drawing, keys belong to the drawing tools, not to the player
+const DRAW_KEYS = { KeyB: 'pen', KeyH: 'marker', KeyA: 'arrow', KeyR: 'rect', KeyE: 'ellipse', KeyT: 'text' };
+window.addEventListener('keydown', e => {
+  if (!draw.on || document.querySelector('dialog[open]') || e.target === dText) return;
+  const ctrl = e.ctrlKey || e.metaKey;
+  e.preventDefault();
+  e.stopPropagation();
+  if (ctrl && e.code === 'KeyZ') (e.shiftKey ? redoDraw : undoDraw)();
+  else if (ctrl && e.code === 'KeyY') redoDraw();
+  else if (ctrl && e.code === 'KeyC') exportDrawing('copy');
+  else if (ctrl && e.code === 'KeyS') exportDrawing('save');
+  else if (e.code === 'Escape' || e.code === 'KeyD') closeDraw();
+  else if (e.code === 'Delete' || e.code === 'Backspace') $('#draw-clear').click();
+  else if (/^Digit[123]$/.test(e.code)) { draw.size = Number(e.code.slice(5)) - 1; syncDrawBar(); }
+  else if (!ctrl && DRAW_KEYS[e.code]) setDrawTool(DRAW_KEYS[e.code]);
+}, true);
 
 // ---------- updates
 

@@ -1457,6 +1457,7 @@ document.addEventListener('keydown', e => {
     Escape: () => (document.fullscreenElement ? document.exitFullscreen() : trimOpen() ? setTrimOpen(false) : closeVideo()),
     KeyC: screenshot,
     KeyT: toggleTrim,
+    KeyD: toggleDraw,
     PageUp: () => loadIndex(state.current - 1),
     PageDown: () => loadIndex(state.current + 1),
     Home: () => seekBy(-Infinity),

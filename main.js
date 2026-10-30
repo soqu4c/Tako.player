@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -482,6 +482,33 @@ ipcMain.handle('screenshot', async (_e, { file, time }) => {
   if (r.canceled || !r.filePath) return null;
   await run(FFMPEG, ['-hide_banner', '-y', '-ss', time.toFixed(3), '-i', file, '-frames:v', '1', '-update', '1', '-q:v', '2', r.filePath]);
   return r.filePath;
+});
+
+// ---------- drawing on a frame: the exact frame, then saving or copying the finished picture
+
+ipcMain.handle('grab-frame', async (_e, { file, time }) => {
+  const png = await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-ss', Math.max(0, time).toFixed(3), '-i', file,
+    '-map', '0:v:0', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1']);
+  if (!png.length) throw new Error('не удалось взять кадр');
+  return 'data:image/png;base64,' + png.toString('base64');
+});
+
+const PNG_DATA = 'data:image/png;base64,';
+
+ipcMain.handle('save-image', async (_e, { data, file, time }) => {
+  if (!String(data).startsWith(PNG_DATA)) throw new Error('неверная картинка');
+  const r = await dialog.showSaveDialog(win, {
+    defaultPath: path.join(app.getPath('pictures'), `${path.parse(file).name}_${stamp(time)}_рисунок.png`),
+    filters: [{ name: 'PNG', extensions: ['png'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  fs.writeFileSync(r.filePath, Buffer.from(data.slice(PNG_DATA.length), 'base64'));
+  return r.filePath;
+});
+
+ipcMain.handle('copy-image', (_e, data) => {
+  if (!String(data).startsWith(PNG_DATA)) throw new Error('неверная картинка');
+  clipboard.writeImage(nativeImage.createFromDataURL(data));
 });
 
 ipcMain.handle('save-dialog', async (_e, { source, ext }) => {

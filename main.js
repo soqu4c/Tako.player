@@ -122,7 +122,47 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
   createWindow();
+  setupUpdates();
 });
+
+// ---------- updates from GitHub Releases
+//
+// A new version downloads in the background; it installs on the next quit, or right away
+// when the user clicks "restart". Only the installed app updates, not a run from source.
+
+let updater = null;
+let updateState = { status: 'idle' };
+
+function sendUpdate(state) {
+  updateState = state;
+  if (win) win.webContents.send('update', state);
+}
+
+function setupUpdates() {
+  if (!app.isPackaged) return;
+  ({ autoUpdater: updater } = require('electron-updater'));
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = true;
+  updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
+  updater.on('update-not-available', () => sendUpdate({ status: 'latest' }));
+  updater.on('update-available', i => sendUpdate({ status: 'downloading', version: i.version, percent: 0 }));
+  updater.on('download-progress', p => sendUpdate({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
+  updater.on('update-downloaded', i => sendUpdate({ status: 'ready', version: i.version }));
+  updater.on('error', e => sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] }));
+  setTimeout(() => updater.checkForUpdates().catch(() => {}), 4000);
+}
+
+ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater }));
+ipcMain.handle('update-check', () => {
+  if (updater) updater.checkForUpdates().catch(() => {});
+});
+ipcMain.handle('update-install', () => {
+  // Silent install, then the new version starts by itself
+  if (updater && updateState.status === 'ready') updater.quitAndInstall(true, true);
+});
+
+const PROJECT_URL = 'https://github.com/soqu4c/Tako.player';
+ipcMain.handle('open-project', () => shell.openExternal(PROJECT_URL));
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
   for (const p of jobs.values()) p.kill();

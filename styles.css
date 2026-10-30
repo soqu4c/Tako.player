@@ -155,6 +155,23 @@ option, optgroup { background: #171922; color: var(--text); }
 .app-name { font-weight: 700; letter-spacing: .01em; font-size: 13.5px; }
 .app-suffix { font-weight: 400; color: var(--muted); }
 #title-file { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; margin-left: 8px; }
+.update-pill {
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+  padding: 4px 12px 4px 9px;
+  border-radius: 999px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px -4px rgba(var(--accent-rgb), .8);
+  animation: rise .4s var(--ease);
+}
+.update-pill .i { width: 14px; height: 14px; }
+.update-pill:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.about-update { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
+.about-update #about-update-text { color: var(--soft); }
+.about-links { display: flex; gap: 8px; }
 #title-file:not(:empty)::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 10px 2px 0; }
 
 /* ---------- layout */

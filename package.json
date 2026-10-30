@@ -1,15 +1,16 @@
 {
   "name": "takao",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Tako.player — медиаплеер",
   "author": "takao",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "set ELECTRON_RUN_AS_NODE=&& electron .",
-    "dist": "electron-builder --win --x64"
+    "dist": "electron-builder --win --x64 --publish never"
   },
   "dependencies": {
+    "electron-updater": "6.3.9",
     "ffmpeg-static": "5.2.0",
     "ffprobe-static": "3.1.0"
   },
@@ -24,8 +25,18 @@
     "directories": {
       "output": "dist"
     },
-    "electronLanguages": ["ru", "en-US"],
+    "electronLanguages": [
+      "ru",
+      "en-US"
+    ],
     "compression": "maximum",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "soqu4c",
+        "repo": "Tako.player"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
@@ -43,12 +54,58 @@
       "node_modules/ffprobe-static/**"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.png"
     },
     "fileAssociations": [
-      { "ext": ["mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "m2ts", "mts", "mpg", "mpeg", "vob", "3gp", "ogv"], "name": "Видео", "description": "Видеофайл", "role": "Viewer" },
-      { "ext": ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "wma", "ac3", "dts", "mka"], "name": "Аудио", "description": "Аудиофайл", "role": "Viewer" }
+      {
+        "ext": [
+          "mp4",
+          "mkv",
+          "webm",
+          "mov",
+          "avi",
+          "wmv",
+          "flv",
+          "m4v",
+          "ts",
+          "m2ts",
+          "mts",
+          "mpg",
+          "mpeg",
+          "vob",
+          "3gp",
+          "ogv"
+        ],
+        "name": "Видео",
+        "description": "Видеофайл",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "mp3",
+          "m4a",
+          "aac",
+          "wav",
+          "flac",
+          "ogg",
+          "opus",
+          "wma",
+          "ac3",
+          "dts",
+          "mka"
+        ],
+        "name": "Аудио",
+        "description": "Аудиофайл",
+        "role": "Viewer"
+      }
     ],
     "nsis": {
       "oneClick": false,

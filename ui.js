@@ -184,7 +184,12 @@ async function renderSettings(tabId = settingsTab) {
   if (tab.about) {
     const { version } = await api.appInfo();
     panel.innerHTML = `<div class="about"><img src="assets/logo.png" alt=""><span class="app-name">Tako<span class="app-suffix">.player</span></span>
-      <div>Версия ${version}</div><div>Видео, музыка, обрезка и дорожки — без лишнего.</div><small>Работает на Electron и FFmpeg</small></div>`;
+      <div>Версия ${version}</div><div>Видео, музыка, обрезка и дорожки — без лишнего.</div><small>Работает на Electron и FFmpeg</small>
+      <div class="about-update"><span id="about-update-text"></span>
+        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div></div>`;
+    $('#about-project').onclick = () => api.openProject();
+    $('#about-check').onclick = () => (upd.status === 'ready' ? api.updateInstall() : api.updateCheck());
+    renderUpdate(upd);
     return;
   }
   const h = document.createElement('h3');
@@ -851,6 +856,38 @@ $('#lib-sort').addEventListener('change', e => {
   renderLibrary();
   e.target.blur();
 });
+
+// ---------- updates
+
+let upd = { status: 'idle' };
+
+function updateText(s) {
+  switch (s.status) {
+    case 'checking': return 'Проверяю обновления…';
+    case 'latest': return 'У вас последняя версия';
+    case 'downloading': return `Скачиваю версию ${s.version}… ${s.percent || 0}%`;
+    case 'ready': return `Версия ${s.version} скачана — установится при перезапуске`;
+    case 'error': return 'Не удалось проверить обновления: ' + s.message;
+    default: return s.enabled === false ? 'Обновления работают в установленной версии плеера' : '';
+  }
+}
+
+function renderUpdate(s) {
+  upd = { ...upd, ...s };
+  const btn = $('#update-btn');
+  btn.hidden = upd.status !== 'ready';
+  btn.querySelector('span').textContent = `Обновить до ${upd.version}`;
+  const text = document.querySelector('#about-update-text');
+  if (!text) return;
+  text.textContent = updateText(upd);
+  const check = $('#about-check');
+  check.textContent = upd.status === 'ready' ? 'Перезапустить и обновить' : 'Проверить обновления';
+  check.disabled = upd.enabled === false || upd.status === 'checking' || upd.status === 'downloading';
+}
+
+api.onUpdate(renderUpdate);
+api.updateState().then(renderUpdate).catch(() => {});
+$('#update-btn').onclick = () => api.updateInstall();
 
 // ---------- init
 

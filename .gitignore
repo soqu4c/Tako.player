@@ -1,0 +1,11 @@
+# dependencies — npm install restores them
+node_modules/
+
+# build output — installers go to GitHub Releases instead
+dist/
+
+# editor and OS clutter
+.vscode/
+Thumbs.db
+desktop.ini
+*.log

@@ -1,0 +1,34 @@
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { pathToFileURL } = require('url');
+const path = require('path');
+
+contextBridge.exposeInMainWorld('api', {
+  openFiles: () => ipcRenderer.invoke('open-files'),
+  openFolder: () => ipcRenderer.invoke('open-folder'),
+  expandPaths: paths => ipcRenderer.invoke('expand-paths', paths),
+  pickFolder: () => ipcRenderer.invoke('pick-folder'),
+  libraryScan: folders => ipcRenderer.invoke('library-scan', folders),
+  libraryThumb: file => ipcRenderer.invoke('library-thumb', file),
+  frameThumb: opts => ipcRenderer.invoke('frame-thumb', opts),
+  clearThumbs: () => ipcRenderer.invoke('clear-thumbs'),
+  appInfo: () => ipcRenderer.invoke('app-info'),
+  obsTracks: () => ipcRenderer.invoke('obs-tracks'),
+  pickSubtitle: () => ipcRenderer.invoke('pick-subtitle'),
+  loadSubtitle: file => ipcRenderer.invoke('load-subtitle', file),
+  probe: file => ipcRenderer.invoke('probe', file),
+  playable: opts => ipcRenderer.invoke('playable', opts),
+  subtitle: opts => ipcRenderer.invoke('subtitle', opts),
+  screenshot: opts => ipcRenderer.invoke('screenshot', opts),
+  saveDialog: opts => ipcRenderer.invoke('save-dialog', opts),
+  exportClip: opts => ipcRenderer.invoke('export', opts),  cancel: jobId => ipcRenderer.invoke('cancel', jobId),
+  astreamStart: opts => ipcRenderer.invoke('astream-start', opts),
+  astreamAck: id => ipcRenderer.send('astream-ack', id),
+  astreamStop: id => ipcRenderer.send('astream-stop', id),
+  onAstream: cb => ipcRenderer.on('astream', (_e, d) => cb(d)),
+  reveal: file => ipcRenderer.invoke('reveal', file),
+  toUrl: file => pathToFileURL(file).href,
+  basename: file => path.basename(file),
+  pathForFile: f => webUtils.getPathForFile(f),
+  onProgress: cb => ipcRenderer.on('progress', (_e, d) => cb(d)),
+  onOpenPaths: cb => ipcRenderer.on('open-paths', (_e, d) => cb(d)),
+});

@@ -1,0 +1,61 @@
+{
+  "name": "takao",
+  "version": "1.1.0",
+  "description": "Tako.player — медиаплеер",
+  "author": "takao",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "set ELECTRON_RUN_AS_NODE=&& electron .",
+    "dist": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.2.0",
+    "ffprobe-static": "3.1.0"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.takao.pleer",
+    "productName": "Tako.player",
+    "executableName": "Tako",
+    "directories": {
+      "output": "dist"
+    },
+    "electronLanguages": ["ru", "en-US"],
+    "compression": "maximum",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "ui.js",
+      "index.html",
+      "styles.css",
+      "assets/**",
+      "!node_modules/ffprobe-static/bin/darwin/**",
+      "!node_modules/ffprobe-static/bin/linux/**",
+      "!node_modules/ffprobe-static/bin/win32/ia32/**"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/ffprobe-static/**"
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.png"
+    },
+    "fileAssociations": [
+      { "ext": ["mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "m2ts", "mts", "mpg", "mpeg", "vob", "3gp", "ogv"], "name": "Видео", "description": "Видеофайл", "role": "Viewer" },
+      { "ext": ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "wma", "ac3", "dts", "mka"], "name": "Аудио", "description": "Аудиофайл", "role": "Viewer" }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Tako.player",
+      "artifactName": "Tako.player-Setup-${version}.${ext}"
+    }
+  }
+}

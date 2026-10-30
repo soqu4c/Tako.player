@@ -186,8 +186,11 @@ async function renderSettings(tabId = settingsTab) {
     panel.innerHTML = `<div class="about"><img src="assets/logo.png" alt=""><span class="app-name">Tako<span class="app-suffix">.player</span></span>
       <div>Версия ${version}</div><div>Видео, музыка, обрезка и дорожки — без лишнего.</div><small>Работает на Electron и FFmpeg</small>
       <div class="about-update"><span id="about-update-text"></span>
-        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div></div>`;
+        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div>
+      <div class="donate"><div>Нравится плеер? Можно поддержать автора — это помогает делать Tako лучше.</div>
+        <button id="about-donate" class="btn accent"><svg class="i"><use href="#i-heart"/></svg>Поддержать автора</button></div></div>`;
     $('#about-project').onclick = () => api.openProject();
+    $('#about-donate').onclick = () => api.openDonate();
     $('#about-check').onclick = () => (upd.status === 'ready' ? api.updateInstall() : api.updateCheck());
     renderUpdate(upd);
     return;

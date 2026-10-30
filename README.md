@@ -76,6 +76,12 @@ npm run dist    # собрать установщик в папку dist
 
 Код плеера: `main.js` (окно, FFmpeg, файлы, обновления), `renderer.js` (воспроизведение, дорожки, обрезка, сохранение), `ui.js` (библиотека, настройки, превью, интерфейс), `index.html` и `styles.css`.
 
+## Поддержать автора
+
+Если плеер пригодился, можно поддержать автора донатом: **[donationalerts.com/r/whytakao](https://www.donationalerts.com/r/whytakao)** ❤
+
+Кнопка «Поддержать автора» есть и в самом плеере: Настройки → О программе.
+
 ## Благодарности
 
 Сделано на [Electron](https://www.electronjs.org). Работа с видео — [FFmpeg](https://ffmpeg.org) (сборки [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) через `ffmpeg-static`, лицензия GPL).

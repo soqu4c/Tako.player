@@ -162,7 +162,9 @@ ipcMain.handle('update-install', () => {
 });
 
 const PROJECT_URL = 'https://github.com/soqu4c/Tako.player';
+const DONATE_URL = 'https://www.donationalerts.com/r/whytakao';
 ipcMain.handle('open-project', () => shell.openExternal(PROJECT_URL));
+ipcMain.handle('open-donate', () => shell.openExternal(DONATE_URL));
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
   for (const p of jobs.values()) p.kill();

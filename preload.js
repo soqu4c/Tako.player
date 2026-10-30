@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   updateInstall: () => ipcRenderer.invoke('update-install'),
   onUpdate: cb => ipcRenderer.on('update', (_e, d) => cb(d)),
   openProject: () => ipcRenderer.invoke('open-project'),
+  openDonate: () => ipcRenderer.invoke('open-donate'),
   pickSubtitle: () => ipcRenderer.invoke('pick-subtitle'),
   loadSubtitle: file => ipcRenderer.invoke('load-subtitle', file),
   probe: file => ipcRenderer.invoke('probe', file),

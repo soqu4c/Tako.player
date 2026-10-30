@@ -70,7 +70,7 @@ const SETTING_TABS = [
     id: 'play', title: 'Воспроизведение', icon: 'i-play', rows: [
       { key: 'resume', type: 'toggle', label: 'Продолжать с места остановки', hint: 'Плеер помнит, где вы остановились, в 200 последних файлах' },
       { key: 'autoplay', type: 'toggle', label: 'Сразу начинать воспроизведение', hint: 'Иначе файл откроется на паузе' },
-      { key: 'autoNext', type: 'toggle', label: 'Включать следующий файл из очереди' },
+      { key: 'autoNext', type: 'toggle', label: 'Включать следующий файл из открытой папки' },
       { key: 'seekStep', type: 'segment', label: 'Перемотка стрелками ← →', options: [[5, '5 с'], [10, '10 с'], [15, '15 с'], [30, '30 с']] },
     ],
   },
@@ -289,24 +289,10 @@ addFiles = paths => {
   if (paths.some(p => !SUB_RE.test(p))) showView('player');
 };
 
-function setQueueOpen(open) {
-  document.body.classList.toggle('queue-open', open);
-  $('#btn-side').classList.toggle('on', open);
-  store('queueOpen', open);
-}
-
 $('#nav-player').onclick = () => showView('player');
 $('#nav-library').onclick = () => showView('library');
 $('#btn-go-library').onclick = () => showView('library');
 $('#nav-settings').onclick = openSettings;
-$('#btn-side').onclick = () => {
-  if (currentView !== 'player') {
-    showView('player');
-    setQueueOpen(true);
-  } else {
-    setQueueOpen(!document.body.classList.contains('queue-open'));
-  }
-};
 
 // ---------- player chrome: auto-hide, play state, trim panel
 
@@ -704,10 +690,33 @@ async function renderRecent() {
   box.innerHTML = '';
   items.forEach((p, i) => {
     const f = { path: p, name: api.basename(p), audio: AUDIO_RE.test(p) };
-    box.append(makeCard(f, `Остановились на ${fmt(pos[p])}`, () => addFiles([p]), i));
+    const card = makeCard(f, `Остановились на ${fmt(pos[p])}`, () => addFiles([p]), i);
+    const rm = document.createElement('button');
+    rm.className = 'card-rm';
+    rm.title = 'Убрать из «Продолжить просмотр»';
+    rm.innerHTML = '<svg class="i"><use href="#i-x"/></svg>';
+    rm.onclick = e => {
+      e.stopPropagation();
+      forgetPosition(p);
+      card.classList.add('leaving');
+      setTimeout(renderRecent, 220);
+    };
+    card.querySelector('.thumb').append(rm);
+    box.append(card);
   });
   $('#recent-wrap').hidden = !items.length;
 }
+
+function forgetPosition(file) {
+  const all = recall('positions', {});
+  delete all[file];
+  store('positions', all);
+}
+
+$('#recent-clear').onclick = () => {
+  store('positions', {});
+  renderRecent();
+};
 
 // ---------- library
 
@@ -780,7 +789,7 @@ function renderLibrary() {
     };
     const all = document.createElement('button');
     all.className = 'btn small';
-    all.title = 'Заменить очередь всеми файлами этой папки';
+    all.title = 'Смотреть все файлы этой папки подряд';
     all.innerHTML = '<svg class="i"><use href="#i-play"/></svg>Играть всё';
     all.onclick = () => playFrom(files, 0);
     all.hidden = !files.length;
@@ -892,7 +901,6 @@ $('#update-btn').onclick = () => api.updateInstall();
 // ---------- init
 
 applySettings();
-setQueueOpen(!!recall('queueOpen', false));
 api.obsTracks().then(d => {
   obsTracks = d;
   if (state.info) refreshTrackLabels();

@@ -54,7 +54,6 @@
     <div class="rail-indicator"></div>
     <button id="nav-player" class="rail-btn active" data-tip="Плеер"><svg class="i"><use href="#i-screen"/></svg></button>
     <button id="nav-library" class="rail-btn" data-tip="Библиотека (Ctrl+L)"><svg class="i"><use href="#i-grid"/></svg></button>
-    <button id="btn-side" class="rail-btn" data-tip="Очередь"><svg class="i"><use href="#i-list"/></svg><span id="queue-badge" hidden></span></button>
     <span class="rail-sep"></span>
     <button id="btn-open" class="rail-btn" data-tip="Открыть файлы (Ctrl+O)"><svg class="i"><use href="#i-file-plus"/></svg></button>
     <span class="rail-spacer"></span>
@@ -79,7 +78,7 @@
               <button id="btn-go-library" class="btn ghost"><svg class="i"><use href="#i-grid"/></svg>Библиотека</button>
             </div>
             <div id="recent-wrap" hidden>
-              <div class="section-title">Продолжить просмотр</div>
+              <div class="section-head"><div class="section-title">Продолжить просмотр</div><button id="recent-clear" class="btn ghost small">Очистить</button></div>
               <div id="recent" class="cards"></div>
             </div>
           </div>
@@ -150,14 +149,12 @@
                     <button class="icon xs nudge" data-p="in" data-d="-1" title="На кадр раньше (Shift — на секунду)">‹</button>
                     <input id="in-time" class="time-input" placeholder="0:00.000" spellcheck="false" title="Можно ввести время вручную">
                     <button class="icon xs nudge" data-p="in" data-d="1" title="На кадр позже (Shift — на секунду)">›</button>
-                    <button id="btn-in" class="btn small" title="Начало = текущий момент (I)">Сюда</button>
                   </div>
                   <div class="tpoint">
                     <span class="tlabel">Конец</span>
                     <button class="icon xs nudge" data-p="out" data-d="-1" title="На кадр раньше (Shift — на секунду)">‹</button>
                     <input id="out-time" class="time-input" placeholder="конец" spellcheck="false" title="Можно ввести время вручную">
                     <button class="icon xs nudge" data-p="out" data-d="1" title="На кадр позже (Shift — на секунду)">›</button>
-                    <button id="btn-out" class="btn small" title="Конец = текущий момент (O)">Сюда</button>
                   </div>
                   <span id="sel-len"></span>
                 </div>
@@ -176,26 +173,6 @@
         <!-- inside #player so it stays visible in fullscreen -->
         <div id="toast" hidden><span id="toast-text"></span><button id="toast-action" class="btn small" hidden></button></div>
       </main>
-
-      <aside id="sidebar">
-        <div class="side-head">
-          <div>
-            <div class="side-title">Очередь</div>
-            <div id="queue-count" class="side-sub"></div>
-          </div>
-          <span class="side-actions">
-            <button id="btn-add-folder" class="icon sm" title="Добавить папку (Ctrl+Shift+O)"><svg class="i"><use href="#i-folder"/></svg></button>
-            <button id="btn-add" class="icon sm" title="Добавить файлы (Ctrl+O)"><svg class="i"><use href="#i-plus"/></svg></button>
-            <button id="btn-clear-queue" class="icon sm" title="Очистить очередь"><svg class="i"><use href="#i-trash"/></svg></button>
-          </span>
-        </div>
-        <ul id="playlist"></ul>
-        <div id="playlist-empty">
-          <svg class="i"><use href="#i-list"/></svg>
-          <div>Очередь пуста</div>
-          <small>Перетащите файлы или папку в окно</small>
-        </div>
-      </aside>
     </section>
 
     <section id="view-library" class="view">
@@ -354,10 +331,11 @@
     <tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Начало / конец фрагмента на текущем моменте</td></tr>
     <tr><td><kbd>P</kbd></td><td>Проиграть фрагмент</td></tr>
     <tr><td><kbd>L</kbd></td><td>Повтор</td></tr>
-    <tr><td><kbd>X</kbd> <kbd>Esc</kbd></td><td>Закрыть обрезку и сбросить выделение</td></tr>
+    <tr><td><kbd>X</kbd></td><td>Закрыть обрезку и сбросить выделение</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Выйти из полного экрана → закрыть обрезку → закрыть видео</td></tr>
     <tr><td><kbd>C</kbd></td><td>Сохранить кадр</td></tr>
     <tr><td><kbd>F</kbd>, двойной клик</td><td>Полный экран</td></tr>
-    <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл</td></tr>
+    <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл в открытой папке</td></tr>
     <tr><td><kbd>Ctrl+O</kbd></td><td>Открыть файлы</td></tr>
     <tr><td><kbd>Ctrl+Shift+O</kbd></td><td>Открыть папку (вместе с вложенными)</td></tr>
     <tr><td><kbd>Ctrl+L</kbd></td><td>Библиотека / плеер</td></tr>

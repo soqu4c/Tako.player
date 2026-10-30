@@ -178,56 +178,27 @@ api.onProgress(({ jobId, value }) => {
 
 const SUB_RE = /\.(srt|vtt|ass|ssa)$/i;
 
+// Opening media replaces what was open: one file, or every file of an opened folder,
+// which ⏮ ⏭ then step through. Subtitle files attach to the video already playing.
 function addFiles(paths) {
   const subs = paths.filter(p => SUB_RE.test(p));
-  const media = paths.filter(p => !SUB_RE.test(p));
-  // Files already in the playlist are not added again
-  const known = new Set(state.playlist.map(it => it.path.toLowerCase()));
-  const fresh = media.filter(p => !known.has(p.toLowerCase()) && known.add(p.toLowerCase()));
-  const first = state.playlist.length;
-  for (const p of fresh) state.playlist.push({ path: p, name: api.basename(p) });
-  renderPlaylist();
-  if (fresh.length) {
-    loadIndex(first);
-    if (fresh.length > 1) osd(`Добавлено файлов: ${fresh.length}`);
-  } else if (media.length) {
-    loadIndex(state.playlist.findIndex(it => it.path.toLowerCase() === media[0].toLowerCase()));
+  const seen = new Set();
+  const media = paths.filter(p => !SUB_RE.test(p) && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
+  if (media.length) {
+    state.playlist = media.map(p => ({ path: p, name: api.basename(p) }));
+    state.current = -1;
+    renderPlaylist();
+    loadIndex(0);
+    if (media.length > 1) osd(`Открыто файлов: ${media.length}`);
   } else if (subs.length && state.info) {
     loadExternalSub(subs[0]);
   }
 }
 
+// Only the ⏮ ⏭ buttons depend on the list now
 function renderPlaylist() {
-  const ul = $('#playlist');
-  ul.innerHTML = '';
-  state.playlist.forEach((it, i) => {
-    const li = document.createElement('li');
-    if (i === state.current) li.className = 'active';
-    li.title = it.path;
-    li.style.animationDelay = Math.min(i, 20) * 18 + 'ms';
-    const num = document.createElement('span');
-    num.className = 'num';
-    num.textContent = i + 1;
-    const eq = document.createElement('span');
-    eq.className = 'eq';
-    eq.innerHTML = '<i></i><i></i><i></i>';
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = it.name;
-    const rm = document.createElement('button');
-    rm.className = 'rm';
-    rm.textContent = '×';
-    rm.title = 'Убрать из очереди';
-    rm.onclick = e => { e.stopPropagation(); removeItem(i); };
-    li.onclick = () => loadIndex(i);
-    li.append(num, eq, name, rm);
-    ul.append(li);
-  });
-  const n = state.playlist.length;
-  $('#playlist-empty').hidden = n > 0;
-  $('#queue-count').textContent = n ? `${n} ${plural(n, 'файл', 'файла', 'файлов')}` : '';
-  $('#queue-badge').hidden = n < 2;
-  $('#queue-badge').textContent = n;
+  $('#btn-prev').disabled = state.current <= 0;
+  $('#btn-next').disabled = state.current < 0 || state.current >= state.playlist.length - 1;
 }
 
 function plural(n, one, few, many) {
@@ -238,21 +209,13 @@ function plural(n, one, few, many) {
   return many;
 }
 
-function clearQueue() {
+// Esc: stop and go back to the start screen
+function closeVideo() {
+  if (!state.info) return;
+  if (document.fullscreenElement) document.exitFullscreen();
   state.playlist = [];
   state.current = -1;
   unload();
-  renderPlaylist();
-}
-
-function removeItem(i) {
-  state.playlist.splice(i, 1);
-  if (i === state.current) {
-    state.current = -1;
-    unload();
-  } else if (i < state.current) {
-    state.current--;
-  }
   renderPlaylist();
 }
 
@@ -1408,8 +1371,6 @@ async function openFolder() {
 $('#btn-open').onclick = openFiles;
 $('#btn-open-big').onclick = openFiles;
 $('#btn-open-folder-big').onclick = openFolder;
-$('#btn-add').onclick = openFiles;
-$('#btn-add-folder').onclick = openFolder;
 $('#btn-play').onclick = togglePlay;
 $('#btn-prev').onclick = () => loadIndex(state.current - 1);
 $('#btn-next').onclick = () => loadIndex(state.current + 1);
@@ -1421,9 +1382,6 @@ $('#btn-shot').onclick = screenshot;
 $('#btn-info').onclick = showInfo;
 $('#btn-help').onclick = () => $('#help-dlg').showModal();
 $('#btn-full').onclick = toggleFullscreen;
-$('#btn-clear-queue').onclick = clearQueue;
-$('#btn-in').onclick = () => setIn(video.currentTime);
-$('#btn-out').onclick = () => setOut(video.currentTime);
 $('#btn-play-sel').onclick = playSelection;
 $('#btn-loop').onclick = toggleLoop;
 $('#btn-export').onclick = openExport;
@@ -1495,7 +1453,8 @@ document.addEventListener('keydown', e => {
     KeyP: playSelection,
     KeyL: toggleLoop,
     KeyX: () => setTrimOpen(false),
-    Escape: () => setTrimOpen(false),
+    // In fullscreen Esc only leaves fullscreen; then it closes trimming, then the video
+    Escape: () => (document.fullscreenElement ? document.exitFullscreen() : trimOpen() ? setTrimOpen(false) : closeVideo()),
     KeyC: screenshot,
     KeyT: toggleTrim,
     PageUp: () => loadIndex(state.current - 1),

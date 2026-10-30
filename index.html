@@ -357,7 +357,15 @@
   </div>
 </dialog>
 
-<div id="splash"><img src="assets/logo.png" alt=""><div class="splash-name">Tako<span class="app-suffix">.player</span></div></div>
+<div id="splash">
+  <img src="assets/logo.png" alt="">
+  <div class="splash-name">Tako<span class="app-suffix">.player</span></div>
+  <div class="splash-update">
+    <div id="splash-status"></div>
+    <div class="progress" id="splash-progress" hidden><div id="splash-bar"></div></div>
+    <button id="splash-skip" class="btn ghost small" hidden>Пропустить — обновлю в фоне</button>
+  </div>
+</div>
 
 <script src="renderer.js"></script>
 <script src="ui.js"></script>

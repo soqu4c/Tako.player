@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('api', {
   updateCheck: () => ipcRenderer.invoke('update-check'),
   updateInstall: () => ipcRenderer.invoke('update-install'),
   onUpdate: cb => ipcRenderer.on('update', (_e, d) => cb(d)),
+  startupGate: () => ipcRenderer.invoke('startup-gate'),
+  startupSkip: () => ipcRenderer.invoke('startup-skip'),
   openProject: () => ipcRenderer.invoke('open-project'),
   openDonate: () => ipcRenderer.invoke('open-donate'),
   pickSubtitle: () => ipcRenderer.invoke('pick-subtitle'),

@@ -80,7 +80,7 @@ const SETTING_TABS = [
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },
-      { key: 'splash', type: 'toggle', label: 'Заставка при запуске' },
+      { key: 'splash', type: 'toggle', label: 'Заставка при запуске', hint: 'Пока проверяются обновления, она всё равно ненадолго видна' },
     ],
   },
   {
@@ -884,8 +884,23 @@ function updateText(s) {
   }
 }
 
+// While the splash waits for the startup check it shows what is going on
+function renderSplashUpdate() {
+  if (!document.querySelector('#splash') || $('#splash').classList.contains('out')) return;
+  const downloading = upd.status === 'downloading';
+  $('#splash-status').textContent = {
+    checking: 'Проверяю обновления…',
+    downloading: `Скачиваю обновление ${upd.version}… ${upd.percent || 0}%`,
+    ready: 'Устанавливаю обновление, плеер сейчас перезапустится…',
+  }[upd.status] || '';
+  $('#splash-progress').hidden = !downloading && upd.status !== 'ready';
+  $('#splash-bar').style.width = (upd.status === 'ready' ? 100 : upd.percent || 0) + '%';
+  $('#splash-skip').hidden = !downloading;
+}
+
 function renderUpdate(s) {
   upd = { ...upd, ...s };
+  renderSplashUpdate();
   const btn = $('#update-btn');
   btn.hidden = upd.status !== 'ready';
   btn.querySelector('span').textContent = `Обновить до ${upd.version}`;
@@ -911,6 +926,22 @@ api.obsTracks().then(d => {
 renderRecent();
 requestAnimationFrame(moveIndicator);
 
+// The splash stays until the startup update check lets the player open (and at least
+// long enough for its animation when the splash is turned on)
 const splash = $('#splash');
-if (!settings.splash || !settings.motion) splash.remove();
-else splash.addEventListener('animationend', e => { if (e.animationName === 'splash-out') splash.remove(); });
+const splashShown = performance.now();
+const splashMin = settings.splash && settings.motion ? 1300 : 0;
+
+function hideSplash() {
+  if (!settings.motion) {
+    splash.remove();
+    return;
+  }
+  splash.addEventListener('animationend', e => { if (e.animationName === 'splash-out') splash.remove(); });
+  splash.classList.add('out');
+}
+
+$('#splash-skip').onclick = () => api.startupSkip();
+api.startupGate().catch(() => {}).then(() => {
+  setTimeout(hideSplash, Math.max(0, splashMin - (performance.now() - splashShown)));
+});

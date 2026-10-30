@@ -793,8 +793,11 @@ button.icon.xs { width: 26px; height: 26px; font-size: 19px; line-height: 1; pad
   align-items: center;
   justify-content: center;
   gap: 22px;
-  animation: splash-out .5s ease 1.3s forwards;
 }
+#splash.out { animation: splash-out .5s ease forwards; }
+.splash-update { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 64px; width: 300px; }
+#splash-status { color: var(--muted); font-size: 13px; min-height: 18px; text-align: center; animation: fade-in .4s; }
+#splash-progress { width: 100%; }
 #splash img {
   width: 132px;
   height: 132px;

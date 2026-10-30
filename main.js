@@ -122,35 +122,70 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
   createWindow();
-  setupUpdates();
+  setupUpdates(argPaths(process.argv).length > 0);
 });
 
 // ---------- updates from GitHub Releases
 //
-// A new version downloads in the background; it installs on the next quit, or right away
-// when the user clicks "restart". Only the installed app updates, not a run from source.
+// On a plain start the splash waits for the check: a new version is downloaded and installed
+// before the player opens. Started with a file, or after "skip", the update downloads in the
+// background and installs on the next quit (or on "restart"). Runs from source never update.
 
 let updater = null;
 let updateState = { status: 'idle' };
+let releaseGate;
+const startupGate = new Promise(r => { releaseGate = r; });
+let blocking = false; // the splash is waiting for the update
 
 function sendUpdate(state) {
   updateState = state;
   if (win) win.webContents.send('update', state);
 }
 
-function setupUpdates() {
-  if (!app.isPackaged) return;
+// Lets the player open; a download still in progress carries on in the background
+function releaseStartup() {
+  blocking = false;
+  releaseGate();
+}
+
+const STARTUP_CHECK_MS = 6000;
+
+function setupUpdates(openedWithFiles) {
+  if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
   updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
-  updater.on('update-not-available', () => sendUpdate({ status: 'latest' }));
+  updater.on('update-not-available', () => {
+    sendUpdate({ status: 'latest' });
+    if (blocking) releaseStartup();
+  });
   updater.on('update-available', i => sendUpdate({ status: 'downloading', version: i.version, percent: 0 }));
   updater.on('download-progress', p => sendUpdate({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
-  updater.on('update-downloaded', i => sendUpdate({ status: 'ready', version: i.version }));
-  updater.on('error', e => sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] }));
-  setTimeout(() => updater.checkForUpdates().catch(() => {}), 4000);
+  updater.on('update-downloaded', i => {
+    sendUpdate({ status: 'ready', version: i.version });
+    if (blocking) updater.quitAndInstall(true, true);
+  });
+  updater.on('error', e => {
+    sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] });
+    if (blocking) releaseStartup();
+  });
+
+  if (openedWithFiles) {
+    releaseStartup();
+    setTimeout(() => updater.checkForUpdates().catch(() => {}), 4000);
+    return;
+  }
+  blocking = true;
+  // No answer in time (slow or no network): open the player; a found update keeps downloading
+  setTimeout(() => {
+    if (blocking && updateState.status !== 'downloading') releaseStartup();
+  }, STARTUP_CHECK_MS);
+  updater.checkForUpdates().catch(() => { if (blocking) releaseStartup(); });
 }
+
+ipcMain.handle('startup-gate', () => startupGate);
+ipcMain.handle('startup-skip', () => { if (blocking) releaseStartup(); });
 
 ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater }));
 ipcMain.handle('update-check', () => {

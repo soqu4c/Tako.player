@@ -150,11 +150,17 @@ function edCommit() {
   ed.redo = [];
 }
 function edUndo(back = true) {
-  const from = back ? ed.undo : ed.redo;
-  const to = back ? ed.redo : ed.undo;
-  if (!from.length) return;
-  to.push(JSON.stringify(ed.p));
-  ed.p = JSON.parse(from.pop());
+  edGoto(back ? -1 : 1);
+}
+// Several steps back (negative) or forward at once, drawn once at the end
+function edGoto(steps) {
+  const from = steps < 0 ? ed.undo : ed.redo;
+  const to = steps < 0 ? ed.redo : ed.undo;
+  if (!from.length || !steps) return;
+  for (let i = 0; i < Math.abs(steps) && from.length; i++) {
+    to.push(JSON.stringify(ed.p));
+    ed.p = JSON.parse(from.pop());
+  }
   setAudioCount(ed.p, ed.p.aCount || 3);
   ed.sel = new Set([...ed.sel].filter(id => ed.p.clips.some(c => c.id === id)));
   renderHeads();
@@ -577,6 +583,75 @@ function addMarker() {
 }
 $('#ed-marker').onclick = addMarker;
 
+// ---------- history
+//
+// The undo stack holds the project as it was before each step. A step's name comes from
+// what differs between two neighbouring states, so edits need not name themselves.
+
+const CLIP_WORDS = [
+  [['start', 'track'], 'Перемещение'], [['in', 'out'], 'Обрезка'], [['speed'], 'Скорость'], [['trans'], 'Переход'],
+  [['volume'], 'Громкость'], [['fadeIn', 'fadeOut'], 'Появление и затухание'], [['off'], 'Клип включён или выключен'],
+  [['label'], 'Цвет метки'], [['link'], 'Связь картинки и звука'], [['audioK'], 'Дорожка файла'],
+  [['text', 'size', 'color', 'font', 'bold', 'box', 'x', 'y'], 'Текст'],
+  [['posX', 'posY', 'scale', 'scaleX', 'scaleY', 'rot', 'opacity', 'anchorX', 'anchorY'], 'Преобразование'],
+];
+const histParsed = new Map(); // JSON -> project, so the list is not parsed again on every draw
+const histGet = j => {
+  if (!histParsed.has(j)) {
+    if (histParsed.size > 300) histParsed.clear();
+    histParsed.set(j, JSON.parse(j));
+  }
+  return histParsed.get(j);
+};
+function stepName(a, b) {
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  if (b.clips.length > a.clips.length) {
+    const n = b.clips.length - a.clips.length;
+    return b.clips.filter(c => !a.clips.some(x => x.id === c.id)).every(c => c.track === 'T1') ? 'Новая надпись' : n > 2 ? `Добавлено клипов: ${n}` : 'Добавлен клип';
+  }
+  if (b.clips.length < a.clips.length) return a.clips.length - b.clips.length > 2 ? `Удалено клипов: ${a.clips.length - b.clips.length}` : 'Удаление';
+  for (const c of b.clips) {
+    const o = a.clips.find(x => x.id === c.id);
+    if (!o) return 'Разрез';
+    if (same(o, c)) continue;
+    const keys = [...new Set([...Object.keys(o), ...Object.keys(c)])].filter(k => !same(o[k], c[k]));
+    const hit = CLIP_WORDS.find(([ks]) => keys.some(k => ks.includes(k)));
+    return hit ? hit[1] : 'Изменение клипа';
+  }
+  if (!same(a.media, b.media)) return 'Файлы проекта';
+  if (!same(a.markers, b.markers)) return 'Метки';
+  if (!same(a.tracks, b.tracks) || a.aCount !== b.aCount) return 'Дорожки';
+  if (a.w !== b.w || a.h !== b.h || a.fps !== b.fps) return 'Размер кадра';
+  return 'Изменение';
+}
+function renderHistory() {
+  const box = $('#ed-hist');
+  if (box.hidden) return;
+  const states = [...ed.undo, JSON.stringify(ed.p), ...[...ed.redo].reverse()];
+  const now = ed.undo.length;
+  box.innerHTML = '';
+  states.forEach((j, k) => {
+    const b = document.createElement('button');
+    b.className = 'ed-hstep';
+    b.classList.toggle('now', k === now);
+    b.classList.toggle('undone', k > now);
+    b.textContent = k === 0 ? 'Начало' : stepName(histGet(states[k - 1]), k === now ? ed.p : histGet(j));
+    b.onclick = () => edGoto(k - now);
+    box.append(b);
+  });
+  box.querySelector('.now')?.scrollIntoView({ block: 'nearest' });
+}
+for (const tab of document.querySelectorAll('[data-bintab]')) {
+  tab.onclick = () => {
+    for (const t of document.querySelectorAll('[data-bintab]')) t.classList.toggle('on', t === tab);
+    const hist = tab.dataset.bintab === 'hist';
+    $('#ed-bin-list').hidden = hist;
+    $('#ed-hist').hidden = !hist;
+    $('#ed-import').hidden = hist;
+    renderHistory();
+  };
+}
+
 // Buttons above the tracks show whether they can do something now
 function renderHeadButtons() {
   const sel = ed.p.clips.some(c => ed.sel.has(c.id));
@@ -588,6 +663,7 @@ function renderHeadButtons() {
 
 function renderTimeline() {
   renderHeadButtons();
+  renderHistory();
   // frames asked for by the previous drawing but not taken yet may be off screen now
   for (const q of thumbQueue) edThumbs.delete(q.key);
   thumbQueue.length = 0;
@@ -2250,8 +2326,8 @@ function readExportForm(changed) {
   // slider and number box of a bitrate follow each other
   const br = changed === 'ed-ex-br-range' ? $('#ed-ex-br-range').value : $('#ed-ex-br').value;
   const mx = changed === 'ed-ex-max-range' ? $('#ed-ex-max-range').value : $('#ed-ex-max').value;
-  edEnc.vbitrate = clamp(Number(br) || 12, 1, 150);
-  edEnc.vmax = clamp(Number(mx) || 18, 1, 200);
+  edEnc.vbitrate = clamp(Number(br) || 12, 0.1, 150);
+  edEnc.vmax = clamp(Number(mx) || 18, 0.1, 200);
   if (changed && changed.startsWith('ed-ex-br') && edEnc.vmax < edEnc.vbitrate) edEnc.vmax = edEnc.vbitrate;
   if (changed && changed.startsWith('ed-ex-max') && edEnc.vmax < edEnc.vbitrate) edEnc.vbitrate = edEnc.vmax;
   edEnc.preset = $('#ed-ex-preset').value;
@@ -2298,6 +2374,52 @@ $('#ed-ex-match').onclick = () => {
   renderExportForm();
 };
 $('#ed-ex-cancel').onclick = () => $('#ed-ex-dlg').close();
+
+// Ready settings for where the video goes. For a size limit the bitrate is worked out from the
+// length, a little under the limit, with two passes so the file really fits.
+function sizeLimited(mb, w, h, fps, cap) {
+  const T = Math.max(1, edDuration());
+  const audio = 128;
+  const kbps = mb * 8 * 1024 * 0.94 / T - audio; // what is left for the picture, kbit/s
+  const v = Math.floor(Math.min(cap, kbps / 1000) * 10) / 10;
+  if (v < 0.2) {
+    toast(`Ролик слишком длинный для ${mb} МБ: картинка будет почти не видна. Укоротите его или выберите другую настройку.`);
+    return null;
+  }
+  return { w, h, fps, enc: { codec: 'h264', profile: 'high', mode: 'vbr2', vbitrate: v, vmax: Math.round(v * 1.5 * 10) / 10, abitrate: audio, preset: 'veryfast', format: 'mp4' } };
+}
+const EX_PRESETS = [
+  ['YouTube 1080p60', 'Рекомендации YouTube: 1920×1080, 60 к/с, 12 Мбит/с', () => ({ w: 1920, h: 1080, fps: 60, enc: { codec: 'h264', profile: 'high', mode: 'vbr1', vbitrate: 12, vmax: 18, abitrate: 192, format: 'mp4' } })],
+  ['YouTube 1440p', '2560×1440, 60 к/с, 24 Мбит/с — YouTube даёт таким роликам лучшее качество', () => ({ w: 2560, h: 1440, fps: 60, enc: { codec: 'h264', profile: 'high', mode: 'vbr1', vbitrate: 24, vmax: 36, abitrate: 192, format: 'mp4' } })],
+  ['Shorts / TikTok 9:16', 'Вертикально 1080×1920, 60 к/с. Горизонтальное видео растяните кнопкой «Заполнить» в эффектах', () => ({ w: 1080, h: 1920, fps: 60, enc: { codec: 'h264', profile: 'high', mode: 'vbr1', vbitrate: 10, vmax: 15, abitrate: 192, format: 'mp4' } })],
+  ['Discord до 10 МБ', '1280×720, 30 к/с, битрейт под размер ролика — файл влезет в Discord без Nitro', () => sizeLimited(10, 1280, 720, 30, 8)],
+  ['Discord Nitro 50 МБ', '1920×1080, 60 к/с, битрейт под 50 МБ', () => sizeLimited(50, 1920, 1080, 60, 12)],
+  ['Наилучшее', 'Размер и частота как у исходника, почти без потерь (CRF 17), файл большой', () => {
+    const m = ed.p.clips.filter(x => x.track[0] === 'V').map(x => edMedia(x.media)).find(m => m && m.video && !m.image);
+    return { w: m ? m.video.w : ed.p.w, h: m ? m.video.h : ed.p.h, fps: (m && m.video.fps) || ed.p.fps, enc: { codec: 'h264', profile: 'high', mode: 'crf', crf: 17, preset: 'fast', abitrate: 256, format: 'mp4' } };
+  }],
+];
+for (const [name, title, make] of EX_PRESETS) {
+  const b = document.createElement('button');
+  b.className = 'btn small ghost';
+  b.textContent = name;
+  b.title = title;
+  b.onclick = () => {
+    const p = make();
+    if (!p) return;
+    Object.assign(edEnc, p.enc);
+    if (p.w !== ed.p.w || p.h !== ed.p.h || p.fps !== ed.p.fps) {
+      edCommit();
+      Object.assign(ed.p, { w: p.w, h: p.h, fps: p.fps });
+      store('edProject', ed.p);
+      renderProjectSettings();
+    }
+    store('edExport', edEnc);
+    renderExportForm();
+    toast(`${name}: ${title}`);
+  };
+  $('#ed-ex-presets').append(b);
+}
 
 let edJob = null;
 $('#ed-export').onclick = () => {
@@ -2350,8 +2472,52 @@ showView = v => {
   if (v === 'editor') {
     fitScreen();
     renderTimeline();
+    if (!recall('edTourDone', false)) setTimeout(edTour, 400);
   }
 };
+
+// ---------- first look: a short tour that lights up one panel at a time
+
+const TOUR = [
+  ['.ed-bin', 'Проект', 'Нажмите «Импорт» или перетащите сюда видео, музыку и картинки. Потом тяните их на таймлайн. Исходные файлы не меняются.'],
+  ['.ed-timeline', 'Таймлайн', 'Здесь собирается ролик. S — разрезать под бегунком, Delete — удалить, Ctrl + колесо — приблизить. Вкладка «История» рядом с «Проект» — все шаги, к любому можно вернуться.'],
+  ['.ed-insp', 'Эффекты', 'Выберите клип — здесь его положение, масштаб, громкость, скорость и переход с предыдущим клипом. Переход также есть в меню правого клика по клипу.'],
+  ['#ed-export', 'Экспорт', 'Когда ролик готов — «Экспорт». Там есть готовые настройки: YouTube, Shorts / TikTok, Discord до 10 МБ.'],
+];
+function edTour(step = 0) {
+  document.querySelector('.ed-tour')?.remove();
+  if (step >= TOUR.length) {
+    store('edTourDone', true);
+    return;
+  }
+  const [sel, title, text] = TOUR[step];
+  const target = document.querySelector(sel);
+  if (!target || currentView !== 'editor') return;
+  const r = target.getBoundingClientRect();
+  const box = document.createElement('div');
+  box.className = 'ed-tour';
+  box.innerHTML = '<div class="ed-tour-hole"></div><div class="ed-tour-card"><div class="ed-tour-step"></div><b></b><p></p>'
+    + '<div class="ed-tour-btns"><button class="btn small ghost ed-tour-skip">Пропустить</button><button class="btn small accent ed-tour-next"></button></div></div>';
+  Object.assign(box.querySelector('.ed-tour-hole').style, { left: r.left - 4 + 'px', top: r.top - 4 + 'px', width: r.width + 8 + 'px', height: r.height + 8 + 'px' });
+  box.querySelector('.ed-tour-step').textContent = `${step + 1} из ${TOUR.length}`;
+  box.querySelector('b').textContent = title;
+  box.querySelector('p').textContent = text;
+  box.querySelector('.ed-tour-next').textContent = step === TOUR.length - 1 ? 'Понятно' : 'Далее';
+  box.querySelector('.ed-tour-next').onclick = () => edTour(step + 1);
+  box.querySelector('.ed-tour-skip').onclick = () => edTour(TOUR.length);
+  document.body.append(box);
+  // the card goes beside the lit panel, where there is room
+  const card = box.querySelector('.ed-tour-card');
+  const cw = card.offsetWidth, ch = card.offsetHeight;
+  let x = r.right + 14, y = r.top;
+  if (x + cw > innerWidth - 10) x = r.left - cw - 14;
+  if (x < 10) { x = clamp(r.left, 10, innerWidth - cw - 10); y = r.bottom + 14 > innerHeight - ch - 10 ? r.top - ch - 14 : r.bottom + 14; }
+  card.style.left = x + 'px';
+  card.style.top = clamp(y, 10, innerHeight - ch - 10) + 'px';
+  card.querySelector('.ed-tour-next').focus();
+}
+$('#ed-tour-btn').onclick = () => edTour(0);
+$('#ed-bug').onclick = () => reportBug('Редактор');
 $('#nav-editor').onclick = () => showView('editor');
 
 // From the library: a file dragged onto the editor button opens the editor under the mouse,

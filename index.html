@@ -324,6 +324,8 @@
                 <option value="25">25 к/с</option>
               </select>
               <button id="ed-new" class="btn small ghost" title="Начать новый проект">Новый</button>
+              <button id="ed-tour-btn" class="btn small ghost" title="Как пользоваться редактором — короткое обучение">?</button>
+              <button id="ed-bug" class="btn small ghost" title="Сообщить об ошибке: откроется страница на GitHub с уже заполненной версией">Сообщить об ошибке</button>
               <button id="ed-export" class="btn small accent" title="Экспорт ролика (Ctrl+M)"><svg class="i"><use href="#i-scissors"/></svg>Экспорт…</button>
             </div>
             <div id="ed-screen-wrap">
@@ -353,11 +355,13 @@
         <div class="ed-bottom">
           <aside class="ed-bin ed-panel">
             <div class="ed-tabs">
-              <span class="on">Проект</span>
+              <span class="on" data-bintab="bin">Проект</span>
+              <span data-bintab="hist" title="Все изменения проекта: нажмите на шаг, чтобы вернуться к нему">История</span>
               <span class="ed-flex"></span>
               <button id="ed-import" class="btn small accent" title="Добавить файлы в проект (Ctrl+I)"><svg class="i"><use href="#i-plus"/></svg>Импорт</button>
             </div>
             <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
+            <div id="ed-hist" hidden></div>
           </aside>
           <div class="ed-vsplit" data-var="--bin-w" data-key="edBinW" title="Тяните, чтобы поменять ширину; двойной клик — как было"></div>
         <div class="ed-timeline">
@@ -583,6 +587,7 @@
 <dialog id="ed-ex-dlg">
   <h2>Экспорт ролика</h2>
   <p class="hint" id="ed-ex-summary"></p>
+  <div class="ed-ex-presets"><span>Готовые настройки:</span><span id="ed-ex-presets"></span></div>
   <div class="ed-ex-grid">
     <label>Формат
       <select id="ed-ex-format">
@@ -631,10 +636,10 @@
       <input type="range" id="ed-ex-crf" min="14" max="32" step="1">
     </label>
     <label class="wide ed-ex-slider" id="ed-ex-br-row">Целевой битрейт, Мбит/с
-      <span><input type="range" id="ed-ex-br-range" min="1" max="100" step="1"><input type="number" id="ed-ex-br" class="time-input" min="1" max="150" step="1"></span>
+      <span><input type="range" id="ed-ex-br-range" min="1" max="100" step="1"><input type="number" id="ed-ex-br" class="time-input" min="0.1" max="150" step="0.1"></span>
     </label>
     <label class="wide ed-ex-slider" id="ed-ex-max-row">Максимальный битрейт, Мбит/с
-      <span><input type="range" id="ed-ex-max-range" min="1" max="150" step="1"><input type="number" id="ed-ex-max" class="time-input" min="1" max="200" step="1"></span>
+      <span><input type="range" id="ed-ex-max-range" min="1" max="150" step="1"><input type="number" id="ed-ex-max" class="time-input" min="0.1" max="200" step="0.1"></span>
     </label>
     <label>Скорость кодирования
       <select id="ed-ex-preset">

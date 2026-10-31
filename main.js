@@ -1230,11 +1230,18 @@ ipcMain.handle('editor-export', async (_e, o) => {
     // a picture is one frame, repeated for as long as its clip lasts
     if (c.image) args.push('-loop', '1', '-framerate', String(fps), '-t', num(c.dur), '-i', c.file);
     else args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
-    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${w}:${h}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0`;
+    // fitted into the frame, then the clip's own scale, rotation and opacity (Effect Controls)
+    const s = c.scale > 0 ? c.scale : 1;
+    const a = num((c.rot || 0) * Math.PI / 180);
+    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${Math.round(w * s)}:${Math.round(h * s)}:force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuva420p`;
+    if (c.rot) f += `,rotate=${a}:ow=rotw(${a}):oh=roth(${a}):c=none`;
+    if (c.opacity != null && c.opacity < 1) f += `,colorchannelmixer=aa=${num(Math.max(0, c.opacity))}`;
     if (c.fadeIn > 0) f += `,fade=t=in:st=0:d=${num(c.fadeIn)}:alpha=1`;
     if (c.fadeOut > 0) f += `,fade=t=out:st=${num(Math.max(0, c.dur - c.fadeOut))}:d=${num(c.fadeOut)}:alpha=1`;
     graph.push(`${f},setpts=PTS+${num(c.start)}/TB[v${k}]`);
-    graph.push(`[${base}][v${k}]overlay=eof_action=pass:format=auto[base${k + 1}]`);
+    // the clip's centre goes to its position (the middle of the frame unless moved)
+    const cx = c.x != null ? c.x : w / 2, cy = c.y != null ? c.y : h / 2;
+    graph.push(`[${base}][v${k}]overlay=x=${num(cx)}-overlay_w/2:y=${num(cy)}-overlay_h/2:eof_action=pass:format=auto[base${k + 1}]`);
     base = `base${k + 1}`;
     input++;
   });

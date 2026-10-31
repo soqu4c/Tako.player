@@ -296,14 +296,30 @@
     <section id="view-editor" class="view">
       <div class="ed">
         <div class="ed-top">
-          <aside class="ed-bin">
-            <div class="ed-head">
-              <span>Медиа</span>
-              <button id="ed-import" class="btn small accent"><svg class="i"><use href="#i-plus"/></svg>Добавить</button>
-            </div>
-            <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
+          <aside class="ed-insp ed-panel">
+            <div class="ed-tabs"><span class="on">Элементы управления эффектами</span></div>
+            <div id="ed-insp-body"></div>
           </aside>
-          <div class="ed-preview">
+          <div class="ed-preview ed-panel">
+            <div class="ed-tabs">
+              <span class="on">Программа</span>
+              <span class="ed-flex"></span>
+              <select id="ed-res" class="chip" title="Размер кадра готового ролика">
+                <option value="1920x1080">1920×1080</option>
+                <option value="1280x720">1280×720</option>
+                <option value="2560x1440">2560×1440</option>
+                <option value="3840x2160">3840×2160</option>
+                <option value="1080x1920">1080×1920 (вертикальный)</option>
+                <option value="1080x1080">1080×1080 (квадрат)</option>
+              </select>
+              <select id="ed-fps" class="chip" title="Кадров в секунду">
+                <option value="30">30 к/с</option>
+                <option value="60">60 к/с</option>
+                <option value="25">25 к/с</option>
+              </select>
+              <button id="ed-new" class="btn small ghost" title="Начать новый проект">Новый</button>
+              <button id="ed-export" class="btn small accent" title="Экспорт ролика (Ctrl+M)"><svg class="i"><use href="#i-scissors"/></svg>Экспорт…</button>
+            </div>
             <div id="ed-screen-wrap">
               <div id="ed-screen">
                 <video id="ed-v1" muted playsinline></video>
@@ -312,39 +328,28 @@
               </div>
             </div>
             <div class="ed-transport">
-              <button id="ed-home" class="icon sm" title="В начало (Home)"><svg class="i"><use href="#i-prev"/></svg></button>
-              <button id="ed-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="ed-play-icon" href="#i-play"/></svg></button>
-              <button id="ed-end" class="icon sm" title="В конец (End)"><svg class="i"><use href="#i-next"/></svg></button>
-              <span id="ed-time">0:00.00 / 0:00.00</span>
+              <span id="ed-tc-left" class="ed-mon-tc" title="Время линии">00:00:00:00</span>
+              <span class="ed-transport-btns">
+                <button id="ed-mark-btn" class="icon sm" title="Добавить метку (M)"><svg class="i"><use href="#i-bookmark"/></svg></button>
+                <button id="ed-home" class="icon sm" title="В начало (Home)"><svg class="i"><use href="#i-prev"/></svg></button>
+                <button id="ed-fback" class="icon sm" title="Кадр назад (←)"><svg class="i"><use href="#i-back"/></svg></button>
+                <button id="ed-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="ed-play-icon" href="#i-play"/></svg></button>
+                <button id="ed-ffwd" class="icon sm" title="Кадр вперёд (→)"><svg class="i"><use href="#i-fwd"/></svg></button>
+                <button id="ed-end" class="icon sm" title="В конец (End)"><svg class="i"><use href="#i-next"/></svg></button>
+              </span>
+              <span id="ed-time" class="ed-mon-dur" title="Длина монтажа">00:00:00:00</span>
             </div>
           </div>
-          <aside class="ed-insp">
-            <div class="ed-head"><span>Свойства</span></div>
-            <div id="ed-insp-body"></div>
+        </div>
+        <div class="ed-bottom">
+          <aside class="ed-bin ed-panel">
+            <div class="ed-tabs">
+              <span class="on">Проект</span>
+              <span class="ed-flex"></span>
+              <button id="ed-import" class="btn small accent" title="Добавить файлы в проект (Ctrl+I)"><svg class="i"><use href="#i-plus"/></svg>Импорт</button>
+            </div>
+            <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
           </aside>
-        </div>
-        <div class="ed-toolbar">
-          <button id="ed-split" class="btn small" title="Разрезать по линии времени (S)">Разрезать</button>
-          <button id="ed-del" class="btn small" title="Удалить выбранное (Delete)">Удалить</button>
-          <button id="ed-undo" class="icon sm" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
-          <button id="ed-redo" class="icon sm flip" title="Повторить (Ctrl+Shift+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
-          <span class="ed-flex"></span>
-          <select id="ed-res" class="chip" title="Размер кадра готового ролика">
-            <option value="1920x1080">1920×1080</option>
-            <option value="1280x720">1280×720</option>
-            <option value="2560x1440">2560×1440</option>
-            <option value="3840x2160">3840×2160</option>
-            <option value="1080x1920">1080×1920 (вертикальный)</option>
-            <option value="1080x1080">1080×1080 (квадрат)</option>
-          </select>
-          <select id="ed-fps" class="chip" title="Кадров в секунду">
-            <option value="30">30 к/с</option>
-            <option value="60">60 к/с</option>
-            <option value="25">25 к/с</option>
-          </select>
-          <button id="ed-new" class="btn small ghost" title="Начать новый проект">Новый</button>
-          <button id="ed-export" class="btn small accent"><svg class="i"><use href="#i-scissors"/></svg>Экспорт…</button>
-        </div>
         <div class="ed-timeline">
           <div class="ed-tools">
             <button data-edtool="select" class="on" title="Выделение (V)"><svg class="i"><use href="#i-pointer"/></svg></button>
@@ -360,6 +365,11 @@
                 <button id="ed-snap" class="on" title="Привязка: клипы прилипают к краям, меткам и линии времени"><svg class="i"><use href="#i-magnet"/></svg></button>
                 <button id="ed-linked" class="on" title="Связанное перемещение: картинка и звук одного файла двигаются вместе"><svg class="i"><use href="#i-link"/></svg></button>
                 <button id="ed-marker" title="Добавить метку (M)"><svg class="i"><use href="#i-bookmark"/></svg></button>
+                <span class="ed-sep"></span>
+                <button id="ed-undo" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
+                <button id="ed-redo" class="flip" title="Повторить (Ctrl+Shift+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
+                <button id="ed-split" title="Разрезать выделенный клип по линии (S); Shift — все дорожки"><svg class="i"><use href="#i-razor"/></svg></button>
+                <button id="ed-del" title="Удалить выделенное (Delete)"><svg class="i"><use href="#i-x"/></svg></button>
               </div>
             </div>
             <div class="ed-tl-body">
@@ -377,6 +387,7 @@
               <div id="ed-zoomthumb"><i class="l"></i><i class="r"></i></div>
             </div>
           </div>
+        </div>
         </div>
         <div id="ed-progress" hidden>
           <div class="busy-box">

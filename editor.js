@@ -19,6 +19,19 @@ const BASE_TRACKS = [
 let ED_TRACKS = [];
 const trackOf = id => ED_TRACKS.find(t => t.id === id);
 const audioIds = () => ED_TRACKS.filter(t => t.kind === 'audio').map(t => t.id);
+// Label colours as in Premiere; each track has its own, a clip can be given another
+const LABELS = [
+  ['iris', 'Ирис', '#6f7fd8'], ['violet', 'Фиолетовый', '#a46ad6'], ['caribbean', 'Карибский', '#27b3a0'],
+  ['lavender', 'Лавандовый', '#c493e8'], ['cerulean', 'Церулеан', '#2a8fd6'], ['forest', 'Лесной', '#3c9a52'],
+  ['rose', 'Розовый', '#e0629a'], ['mango', 'Манго', '#e8a33a'], ['purple', 'Пурпурный', '#8a4fc7'],
+  ['blue', 'Синий', '#3f6ed8'], ['teal', 'Бирюзовый', '#1f8c9a'], ['magenta', 'Пурпурно-красный', '#d14fb3'],
+  ['tan', 'Песочный', '#c2a079'], ['green', 'Зелёный', '#55b04a'], ['brown', 'Коричневый', '#a0703c'], ['yellow', 'Жёлтый', '#d6c23a'],
+];
+const TRACK_LABELS = { T1: 'rose', V2: 'violet', V1: 'iris', A1: 'forest', A2: 'caribbean', A3: 'mango', A4: 'cerulean', A5: 'lavender', A6: 'tan', A7: 'yellow', A8: 'brown' };
+const labelColor = name => (LABELS.find(l => l[0] === name) || LABELS[0])[2];
+const trackColor = id => labelColor(TRACK_LABELS[id] || 'green');
+const clipColor = c => (c.label ? labelColor(c.label) : trackColor(c.track));
+
 // A sound track is not heard when it is muted, or when another one is soloed
 function trackSilent(id) {
   const st = ed.p.tracks[id];
@@ -268,6 +281,7 @@ function renderHeads() {
     const name = document.createElement('b');
     name.className = 'ed-trname';
     name.textContent = tr.id;
+    name.style.background = trackColor(tr.id);
     h.append(name);
     if (tr.kind === 'audio') {
       toggle('m', st.muted, 'Без звука (Mute)', 'M', () => { st.muted = !st.muted; });
@@ -345,9 +359,9 @@ function renderRuler() {
   for (const t of ed.p.markers || []) {
     const mk = document.createElement('i');
     mk.className = 'ed-mark';
-    mk.style.left = xOf(t) + 'px';
-    mk.title = `Метка ${tc(t)} — клик: перейти, двойной клик: удалить`;
-    mk.onpointerdown = e => { e.stopPropagation(); seekEd(t); };
+    mk.style.left = xOf(markDrag && markDrag.from === t ? markDrag.to : t) + 'px';
+    mk.title = `Метка ${tc(t)} — тяните, чтобы сдвинуть; клик: перейти; двойной клик: удалить`;
+    mk.onpointerdown = e => dragMarker(e, t);
     mk.ondblclick = e => {
       e.stopPropagation();
       edCommit();
@@ -357,6 +371,37 @@ function renderRuler() {
     ruler.append(mk);
   }
   renderZoombar();
+}
+
+// A mark can be dragged along the ruler (it snaps to clip edges and the playhead). The
+// ruler may be redrawn meanwhile, so the drag follows the mouse on the whole page and the
+// mark being dragged is drawn where it is going.
+let markDrag = null; // { from, to }
+function dragMarker(e, t) {
+  e.stopPropagation();
+  e.preventDefault();
+  const x0 = e.clientX;
+  let moved = false;
+  const move = ev => {
+    if (!moved && Math.abs(ev.clientX - x0) < 3) return;
+    if (!moved) { edCommit(); moved = true; }
+    const s = snap(Math.max(0, t + tOf(ev.clientX - x0)), snapPoints(new Set()).filter(p => p !== t));
+    markDrag = { from: t, to: s.t };
+    renderRuler();
+    showSnap(s.hit);
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    showSnap(null);
+    const to = markDrag ? markDrag.to : t;
+    markDrag = null;
+    if (!moved) return seekEd(t);
+    ed.p.markers = [...new Set(ed.p.markers.map(x => (x === t ? Math.round(to * 1000) / 1000 : x)))].sort((a, b) => a - b);
+    edChanged();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
 }
 
 function addMarker() {
@@ -371,22 +416,29 @@ function renderTimeline() {
   for (const q of thumbQueue) edThumbs.delete(q.key);
   thumbQueue.length = 0;
   renderRuler();
-  lanesBox.innerHTML = '';
-  for (const tr of ED_TRACKS) {
+  // The lanes are built aside and swapped in at once: emptying them first would shrink the
+  // timeline for a moment and throw the view back to the top tracks
+  const top = scroller.scrollTop;
+  const lanes = ED_TRACKS.map(tr => {
     const lane = document.createElement('div');
     lane.className = `ed-lane ${tr.kind}`;
     lane.dataset.track = tr.id;
+    lane.style.setProperty('--tc', trackColor(tr.id));
     lane.classList.toggle('off', (tr.kind === 'audio' && trackSilent(tr.id)) || ed.p.tracks[tr.id].hidden);
     lane.classList.toggle('locked', !!ed.p.tracks[tr.id].locked);
     for (const c of ed.p.clips.filter(x => x.track === tr.id)) lane.append(clipEl(c, tr));
-    lanesBox.append(lane);
-  }
+    return lane;
+  });
+  lanesBox.replaceChildren(...lanes);
+  if (scroller.scrollTop !== top) scroller.scrollTop = top;
   placePlayhead();
 }
 
 function clipEl(c, tr) {
   const el = document.createElement('div');
   el.className = `ed-clip ${tr.kind}`;
+  el.style.setProperty('--cc', clipColor(c));
+  el.classList.toggle('disabled', !!c.off);
   el.classList.toggle('sel', ed.sel.has(c.id));
   el.classList.toggle('linked', !!c.link);
   el.dataset.id = c.id;
@@ -430,12 +482,27 @@ const waveIds = new Map(); // request id -> "path|index"
 const wavePoints = m => clamp(Math.round(m.dur * 20), 200, 40000);
 let waveRedraw = 0;
 
+// Redraws that come from work in the background (waveforms being read) wait while a mouse
+// button is down: swapping the timeline under a drag would drop whatever is being dragged
+let pointerDown = false, renderPending = false;
+document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+for (const n of ['pointerup', 'pointercancel']) {
+  document.addEventListener(n, () => {
+    pointerDown = false;
+    if (renderPending) setTimeout(() => { renderPending = false; if (currentView === 'editor') renderTimeline(); });
+  }, true);
+}
+function bgRender() {
+  if (pointerDown) renderPending = true;
+  else if (currentView === 'editor') renderTimeline();
+}
+
 // A long recording takes a while: what is read so far is drawn, with how far it got
 api.onWaveformProgress(({ id, peaks, done }) => {
   const key = waveIds.get(id);
   if (!key || Array.isArray(edWaves.get(key))) return;
   edWaves.set(key, { partial: peaks, done });
-  if (!waveRedraw) waveRedraw = setTimeout(() => { waveRedraw = 0; if (currentView === 'editor') renderTimeline(); }, 800);
+  if (!waveRedraw) waveRedraw = setTimeout(() => { waveRedraw = 0; bgRender(); }, 800);
 });
 
 // The part of a clip that is on screen, in px from the clip's left edge
@@ -457,7 +524,7 @@ function drawClipWave(cv, c, el) {
     waveIds.set(id, key);
     edWaves.set(key, { partial: null, done: 0 });
     api.waveform({ id, file: m.path, index: a.index, points: wavePoints(m) })
-      .then(p => { edWaves.set(key, p); renderTimeline(); })
+      .then(p => { edWaves.set(key, p); bgRender(); })
       .catch(() => edWaves.delete(key))
       .finally(() => waveIds.delete(id));
     peaks = edWaves.get(key);
@@ -548,7 +615,8 @@ function filmStrip(c, m) {
 
 function placePlayhead() {
   $('#ed-playhead').style.left = xOf(ed.t) + 'px';
-  $('#ed-time').textContent = `${fmtEd(ed.t)} / ${fmtEd(edDuration())}`;
+  $('#ed-time').textContent = tc(edDuration());
+  $('#ed-tc-left').textContent = tc(ed.t);
   if (document.activeElement !== $('#ed-tc')) $('#ed-tc').value = tc(ed.t);
 }
 
@@ -665,7 +733,9 @@ lanesBox.addEventListener('pointerdown', e => {
   }
   const c = ed.p.clips.find(x => x.id === Number(el.dataset.id));
   if (ed.tool === 'razor') {
-    splitClips([c], snap(tOf(canvasX(e)), snapPoints(new Set([c.id]))).t);
+    // only the clicked track is cut; with Shift every unlocked track at that point
+    const at = snap(tOf(canvasX(e)), snapPoints(new Set([c.id]))).t;
+    splitClips(e.shiftKey ? ed.p.clips.filter(x => !isLocked(x)) : [c], at);
     return;
   }
   // a click picks just this clip; its linked halves still move with it
@@ -817,7 +887,7 @@ function dragClips(e, c, edge) {
 
 function splitClips(list, t) {
   const cut = [];
-  for (const c of list) for (const x of partners(c)) if (!cut.includes(x) && x.start + 0.02 < t && clipEnd(x) - 0.02 > t) cut.push(x);
+  for (const x of list) if (!cut.includes(x) && x.start + 0.02 < t && clipEnd(x) - 0.02 > t) cut.push(x);
   if (!cut.length) return;
   edCommit();
   const newLink = new Map();
@@ -834,9 +904,12 @@ function splitClips(list, t) {
   edChanged();
 }
 
-function splitAtPlayhead() {
-  const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
-  splitClips((sel.length ? sel : ed.p.clips).filter(c => !isLocked(c)), ed.t);
+function splitAtPlayhead(shiftAll = false) {
+  // only what is selected is cut (Shift+S cuts every unlocked track)
+  const sel = ed.p.clips.filter(c => ed.sel.has(c.id) && !isLocked(c));
+  if (shiftAll) return splitClips(ed.p.clips.filter(c => !isLocked(c)), ed.t);
+  if (!sel.length) return toast('Выберите клип, который резать (или Shift+S — разрезать все дорожки).');
+  splitClips(sel, ed.t);
 }
 
 function deleteSelected() {
@@ -846,6 +919,82 @@ function deleteSelected() {
   ed.sel.clear();
   edChanged();
 }
+
+// ---------- copy, paste, and the clip menu (right click)
+
+let edClipboard = [];
+function copySelected() {
+  const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
+  if (!sel.length) return;
+  const from = Math.min(...sel.map(c => c.start));
+  edClipboard = sel.map(c => ({ ...c, start: c.start - from }));
+  toast(`Скопировано клипов: ${sel.length}. Ctrl+V вставит их у линии времени.`);
+}
+// Pasted at the playhead on the same tracks, over what is there (like Premiere)
+function pasteClips() {
+  if (!edClipboard.length) return;
+  edCommit();
+  const links = new Map();
+  const made = edClipboard.map(c => {
+    const x = { ...c, id: ed.nextId++, start: ed.t + c.start };
+    if (c.link) {
+      if (!links.has(c.link)) links.set(c.link, ed.nextId++);
+      x.link = links.get(c.link);
+    }
+    return x;
+  });
+  ed.p.clips.push(...made);
+  resolveOverlaps(made);
+  ed.sel = new Set(made.map(c => c.id));
+  seekEd(Math.max(...made.map(clipEnd)));
+  edChanged();
+}
+
+function clipMenu(e, c) {
+  e.preventDefault();
+  if (!ed.sel.has(c.id)) {
+    ed.sel = new Set([c.id]);
+    renderTimeline();
+    renderInspector();
+  }
+  const sel = ed.p.clips.filter(x => ed.sel.has(x.id));
+  const change = fn => () => { edCommit(); sel.forEach(fn); edChanged(); };
+  const items = [
+    { icon: c.off ? 'i-eye' : 'i-eye-off', label: c.off ? 'Включить клип' : 'Выключить клип (не виден и не слышен)', run: change(x => { x.off = !c.off; }) },
+  ];
+  if (sel.some(x => x.link)) items.push({ icon: 'i-link', label: 'Отвязать картинку от звука', run: change(x => { x.link = 0; }) });
+  const media = new Set(sel.map(x => x.media));
+  if (sel.length > 1 && media.size === 1 && sel.some(x => trackOf(x.track).kind === 'video') && sel.some(x => trackOf(x.track).kind === 'audio')) {
+    const id = ed.nextId++;
+    items.push({ icon: 'i-link', label: 'Связать выбранное', run: change(x => { x.link = id; }) });
+  }
+  items.push('-',
+    { icon: 'i-scissors', label: 'Разрезать по линии времени', run: () => splitClips(sel, ed.t) },
+    { icon: 'i-file-plus', label: 'Копировать (Ctrl+C)', run: copySelected },
+    '-',
+    { icon: 'i-x', label: 'Удалить', danger: true, run: deleteSelected });
+  openCtxMenu(e.clientX, e.clientY, items);
+  // label colours, as Premiere's "Label" submenu
+  const row = document.createElement('div');
+  row.className = 'ed-labels';
+  for (const [name, title, color] of LABELS) {
+    const b = document.createElement('button');
+    b.style.background = color;
+    b.title = title;
+    b.classList.toggle('on', (c.label || TRACK_LABELS[c.track]) === name);
+    b.onclick = () => { closeCtxMenu(); change(x => { x.label = name; })(); };
+    row.append(b);
+  }
+  const cap = document.createElement('div');
+  cap.className = 'ed-labels-cap';
+  cap.textContent = 'Цвет метки';
+  $('#ctx-menu').prepend(cap, row);
+}
+lanesBox.addEventListener('contextmenu', e => {
+  const el = e.target.closest('.ed-clip');
+  const c = el && ed.p.clips.find(x => x.id === Number(el.dataset.id));
+  if (c && !isLocked(c)) clipMenu(e, c);
+});
 
 // Ruler: click or drag to move the playhead
 $('#ed-ruler').addEventListener('pointerdown', e => {
@@ -933,135 +1082,216 @@ function dragTitle(e, c, d) {
 
 // ---------- inspector
 
+// Effect Controls, as in Premiere: the selected clip's effects in folding sections, each
+// value a blue number that is dragged left/right (Shift: faster, Alt: finer) or clicked to
+// type, with a reset arrow. Several selected clips change together.
+const fxOpen = recall('edFxOpen', { motion: true, opacity: true, volume: true, text: true, source: true });
+
 function renderInspector() {
   const body = $('#ed-insp-body');
   body.innerHTML = '';
   const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
   if (!sel.length) {
-    body.innerHTML = '<div class="ed-hint">Выберите клип на таймлайне.<br><br><b>Пробел</b> — смотреть<br><b>S</b> — разрезать по линии<br><b>C</b> / <b>V</b> — бритва / выбор<br><b>Delete</b> — удалить<br><b>T</b> — надпись<br><b>Ctrl+Z</b> — отменить<br><b>Ctrl + колесо</b> — масштаб</div>';
+    body.innerHTML = '<div class="fx-empty">(клип не выбран)</div>'
+      + '<div class="ed-hint"><b>Пробел</b> — смотреть · <b>S</b> — разрезать выделенное · <b>Shift+S</b> — все дорожки<br>'
+      + '<b>V</b> выделение · <b>A</b> всё дальше · <b>C</b> бритва · <b>H</b> рука · <b>T</b> текст · <b>M</b> метка<br>'
+      + '<b>Ctrl+C / Ctrl+V</b> — копировать и вставить · <b>\\</b> — весь монтаж на экран</div>';
     return;
   }
-  const c = sel.length === 1 ? sel[0] : sel.find(x => x.track[0] === 'V') || sel[0];
+  const c = sel.length === 1 ? sel[0] : sel.find(x => trackOf(x.track).kind === 'video') || sel[0];
   const kind = trackOf(c.track).kind;
   const m = edMedia(c.media);
-  const field = (label, input) => {
-    const l = document.createElement('label');
-    l.className = 'ed-field';
-    l.append(document.createTextNode(label), input);
-    body.append(l);
-    return input;
-  };
-  const head = document.createElement('div');
-  head.className = 'ed-insp-title';
-  head.textContent = kind === 'text' ? 'Надпись' : m ? m.name : '';
-  body.append(head);
-  const info = document.createElement('div');
-  info.className = 'ed-insp-info';
-  info.textContent = `${trackOf(c.track).name} · с ${fmtEd(c.start)} · длина ${fmtEd(clipDur(c))}` + (sel.length > 1 ? ` · выбрано ${sel.length}` : '');
-  body.append(info);
+  const pics = sel.filter(x => trackOf(x.track).kind === 'video');
+  const sounds = sel.filter(x => trackOf(x.track).kind === 'audio');
 
-  const numIn = (val, min, max, step, onSet) => {
-    const i = document.createElement('input');
-    i.type = 'number';
-    Object.assign(i, { min, max, step, value: val });
-    i.className = 'time-input';
-    i.onchange = () => { edCommit(); onSet(clamp(Number(i.value) || 0, min, max)); edChanged(); };
-    return i;
+  // header: clip name over a small bar of where it sits
+  const head = document.createElement('div');
+  head.className = 'fx-head';
+  head.innerHTML = '<div class="fx-name"></div><div class="fx-tc"></div>';
+  head.querySelector('.fx-name').textContent = (sel.length > 1 ? `${sel.length} клипа · ` : '') + (kind === 'text' ? 'Надпись' : m ? m.name : '');
+  head.querySelector('.fx-name').style.setProperty('--cc', clipColor(c));
+  head.querySelector('.fx-tc').textContent = `${trackOf(c.track).name} · ${tc(c.start)} – ${tc(clipEnd(c))} · длина ${tc(clipDur(c))}`;
+  body.append(head);
+
+  const section = (key, title, fill, reset) => {
+    const s = document.createElement('div');
+    s.className = 'fx-sec';
+    s.classList.toggle('open', fxOpen[key] !== false);
+    s.innerHTML = '<div class="fx-title"><svg class="i chev"><use href="#i-chevron"/></svg><i class="fx-badge">fx</i><span></span></div><div class="fx-rows"></div>';
+    s.querySelector('span').textContent = title;
+    s.querySelector('.fx-title').onclick = e => {
+      if (e.target.closest('.fx-reset')) return;
+      fxOpen[key] = !s.classList.contains('open');
+      store('edFxOpen', fxOpen);
+      s.classList.toggle('open', fxOpen[key]);
+    };
+    if (reset) {
+      const r = document.createElement('button');
+      r.className = 'fx-reset';
+      r.title = 'Сбросить';
+      r.innerHTML = '↺';
+      r.onclick = () => { edCommit(); reset(); edChanged(); };
+      s.querySelector('.fx-title').append(r);
+    }
+    fill(s.querySelector('.fx-rows'));
+    body.append(s);
   };
-  const slider = (val, min, max, step, show, onSet) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'ed-slider';
-    const i = document.createElement('input');
-    i.type = 'range';
-    Object.assign(i, { min, max, step, value: val });
-    const out = document.createElement('span');
-    out.textContent = show(val);
-    i.onpointerdown = () => edCommit();
-    i.oninput = () => { onSet(Number(i.value)); out.textContent = show(Number(i.value)); store('edProject', ed.p); syncPreview(true); };
-    i.onchange = () => renderTimeline();
-    wrap.append(i, out);
-    return wrap;
+
+  // one value: label, scrubbable number, optional unit and reset
+  const value = (rows, label, get, set, { min = -Infinity, max = Infinity, step = 1, unit = '', show, def, list = sel }) => {
+    const row = document.createElement('div');
+    row.className = 'fx-row';
+    row.innerHTML = '<span class="fx-label"></span><span class="fx-num" tabindex="0"></span><span class="fx-unit"></span>';
+    row.querySelector('.fx-label').textContent = label;
+    row.querySelector('.fx-unit').textContent = unit;
+    const num = row.querySelector('.fx-num');
+    const paint = () => { num.textContent = show ? show(get(c)) : String(Math.round(get(c) / step) * step).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); };
+    paint();
+    const apply = v => {
+      v = clamp(v, min, max);
+      for (const x of list) set(x, v);
+      paint();
+      store('edProject', ed.p);
+      syncPreview(true);
+    };
+    num.onpointerdown = e => {
+      e.preventDefault();
+      num.setPointerCapture(e.pointerId);
+      const x0 = e.clientX, v0 = get(c);
+      let moved = false;
+      num.onpointermove = ev => {
+        const dx = ev.clientX - x0;
+        if (!moved && Math.abs(dx) < 2) return;
+        if (!moved) { edCommit(); moved = true; document.body.classList.add('fx-scrub'); }
+        const k = ev.shiftKey ? 10 : ev.altKey ? 0.1 : 1;
+        apply(v0 + Math.round(dx * k) * step);
+      };
+      num.onpointerup = () => {
+        num.onpointermove = num.onpointerup = null;
+        document.body.classList.remove('fx-scrub');
+        if (moved) { renderTimeline(); return; }
+        // a click types a value
+        const inp = document.createElement('input');
+        inp.className = 'fx-input';
+        inp.value = num.textContent.replace('−∞', '-100').replace(',', '.');
+        num.replaceWith(inp);
+        inp.focus();
+        inp.select();
+        let closed = false;
+        const done = ok => {
+          if (closed) return; // Enter closes it, and the blur that follows must not again
+          closed = true;
+          if (ok) {
+            const v = parseFloat(inp.value.replace(',', '.'));
+            if (Number.isFinite(v)) { edCommit(); apply(v); renderTimeline(); }
+          }
+          inp.replaceWith(num);
+        };
+        inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); if (ev.key === 'Escape') done(false); ev.stopPropagation(); };
+        inp.onblur = () => done(true);
+      };
+    };
+    if (def !== undefined) {
+      const r = document.createElement('button');
+      r.className = 'fx-reset';
+      r.title = 'Сбросить';
+      r.innerHTML = '↺';
+      r.onclick = () => { edCommit(); apply(def); renderTimeline(); };
+      row.append(r);
+    }
+    rows.append(row);
   };
+
+  if (kind === 'video' || pics.length) {
+    const p = pics.length ? pics : [c];
+    const v = p[0];
+    section('motion', 'Движение', rows => {
+      value(rows, 'Положение X', x => motion(x).x, (x, n) => { x.posX = n; }, { step: 1, def: ed.p.w / 2, list: p });
+      value(rows, 'Положение Y', x => motion(x).y, (x, n) => { x.posY = n; }, { step: 1, def: ed.p.h / 2, list: p });
+      value(rows, 'Масштаб', x => motion(x).scale, (x, n) => { x.scale = n; }, { min: 1, max: 1000, step: 1, unit: '%', def: 100, list: p });
+      value(rows, 'Поворот', x => motion(x).rot, (x, n) => { x.rot = n; }, { min: -3600, max: 3600, step: 1, unit: '°', def: 0, list: p });
+    }, () => p.forEach(x => { x.posX = x.posY = x.scale = null; x.rot = 0; }));
+    section('opacity', 'Непрозрачность', rows => {
+      value(rows, 'Непрозрачность', x => motion(x).opacity, (x, n) => { x.opacity = n; }, { min: 0, max: 100, step: 1, unit: '%', def: 100, list: p });
+      value(rows, 'Появление', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: p });
+      value(rows, 'Исчезание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: p });
+      if (m && m.image) value(rows, 'Длительность', x => clipDur(x), (x, n) => { x.out = x.in + n; }, { min: 0.2, step: 0.1, unit: 'с', list: [v] });
+    }, () => p.forEach(x => { x.opacity = null; x.fadeIn = x.fadeOut = 0; }));
+  }
 
   if (kind === 'text') {
-    const ta = document.createElement('textarea');
-    ta.value = c.text;
-    ta.rows = 3;
-    ta.onfocus = () => edCommit();
-    ta.oninput = () => { c.text = ta.value; store('edProject', ed.p); syncPreview(true); };
-    ta.onchange = () => renderTimeline();
-    field('Текст', ta);
-    field('Размер', slider(c.size, 20, 200, 2, v => v + ' px', v => (c.size = v)));
-    const color = document.createElement('div');
-    color.className = 'ed-colors';
-    for (const col of ['white', 'yellow', '#ff5d3a', '#3ad1ff', '#7bff6b', 'black']) {
-      const b = document.createElement('button');
-      b.style.background = col;
-      b.classList.toggle('on', c.color === col);
-      b.onclick = () => { edCommit(); c.color = col; edChanged(); };
-      color.append(b);
-    }
-    field('Цвет', color);
-    // the text itself is dragged on the picture; these put it in a usual place
-    const pos = document.createElement('div');
-    pos.className = 'ed-pos';
-    for (const [label, x, y] of [['Сверху', 0.5, 0.12], ['По центру', 0.5, 0.5], ['Снизу', 0.5, 0.85]]) {
-      const b = document.createElement('button');
-      b.className = 'btn small';
-      b.textContent = label;
-      b.onclick = () => { edCommit(); Object.assign(c, { x, y }); edChanged(); };
-      pos.append(b);
-    }
-    field('Где — или перетащите текст на картинке', pos);
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = c.box;
-    box.onchange = () => { edCommit(); c.box = box.checked; edChanged(); };
-    const l = field('Подложка', box);
-    l.parentNode.classList.add('row');
-  }
-  if (kind === 'audio') {
-    for (const x of sel.filter(x => trackOf(x.track).kind === 'audio')) {
-      const xm = edMedia(x.media);
-      if (sel.length > 1) {
-        const n = document.createElement('div');
-        n.className = 'ed-insp-sub';
-        n.textContent = x.track;
-        body.append(n);
+    section('text', 'Текст', rows => {
+      const ta = document.createElement('textarea');
+      ta.className = 'fx-text';
+      ta.value = c.text;
+      ta.rows = 3;
+      ta.onfocus = () => edCommit();
+      ta.oninput = () => { c.text = ta.value; store('edProject', ed.p); syncPreview(true); };
+      ta.onchange = () => renderTimeline();
+      rows.append(ta);
+      value(rows, 'Размер', x => x.size, (x, n) => { x.size = n; }, { min: 8, max: 400, step: 1, unit: 'px', def: 72 });
+      value(rows, 'Положение X', x => titleXY(x)[0] * ed.p.w, (x, n) => { x.x = n / ed.p.w; x.y = titleXY(x)[1]; }, { step: 1, def: ed.p.w / 2 });
+      value(rows, 'Положение Y', x => titleXY(x)[1] * ed.p.h, (x, n) => { x.y = n / ed.p.h; x.x = titleXY(x)[0]; }, { step: 1, def: ed.p.h * 0.85 });
+      value(rows, 'Появление', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
+      value(rows, 'Исчезание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
+      const colors = document.createElement('div');
+      colors.className = 'fx-row fx-colors';
+      colors.innerHTML = '<span class="fx-label">Цвет</span>';
+      for (const col of ['white', 'yellow', '#ff5d3a', '#3ad1ff', '#7bff6b', 'black']) {
+        const b = document.createElement('button');
+        b.style.background = col;
+        b.classList.toggle('on', c.color === col);
+        b.onclick = () => { edCommit(); for (const x of sel) x.color = col; edChanged(); };
+        colors.append(b);
       }
-      field('Громкость', slider(x.volume, 0, 2, 0.05, v => Math.round(v * 100) + '%', v => (x.volume = v)));
-      if (xm && xm.audio.length > 1) {
-        const s = document.createElement('select');
-        xm.audio.forEach((a, k) => s.add(new Option(`Дорожка ${k + 1}${a.name ? ' — ' + a.name : ''}`, k)));
-        s.value = x.audioK || 0;
-        s.onchange = () => { edCommit(); x.audioK = Number(s.value); edChanged(); };
-        field('Звуковая дорожка файла', s);
+      rows.append(colors);
+      const box = document.createElement('label');
+      box.className = 'fx-row fx-check';
+      box.innerHTML = '<span class="fx-label">Подложка</span><input type="checkbox">';
+      box.querySelector('input').checked = !!c.box;
+      box.querySelector('input').onchange = ev => { edCommit(); for (const x of sel) x.box = ev.target.checked; edChanged(); };
+      rows.append(box);
+      const where = document.createElement('div');
+      where.className = 'fx-row fx-where';
+      for (const [label, x, y] of [['Сверху', 0.5, 0.12], ['Центр', 0.5, 0.5], ['Снизу', 0.5, 0.85]]) {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.onclick = () => { edCommit(); for (const t of sel) Object.assign(t, { x, y }); edChanged(); };
+        where.append(b);
       }
-    }
-  } else if (sel.some(x => trackOf(x.track).kind === 'audio')) {
-    const a = sel.find(x => trackOf(x.track).kind === 'audio');
-    field('Громкость звука', slider(a.volume, 0, 2, 0.05, v => Math.round(v * 100) + '%', v => (a.volume = v)));
+      rows.append(where);
+    });
   }
-  field('Появление, с', numIn(c.fadeIn, 0, Math.max(0, clipDur(c) / 2), 0.1, v => { for (const x of sel) x.fadeIn = Math.min(v, clipDur(x) / 2); }));
-  field('Исчезание, с', numIn(c.fadeOut, 0, Math.max(0, clipDur(c) / 2), 0.1, v => { for (const x of sel) x.fadeOut = Math.min(v, clipDur(x) / 2); }));
-  if (m && m.image) field('Длительность, с', numIn(+clipDur(c).toFixed(2), 0.2, 3600, 0.5, v => { c.out = c.in + v; }));
 
-  const btns = document.createElement('div');
-  btns.className = 'ed-insp-btns';
-  if (sel.some(x => x.link)) {
-    const b = document.createElement('button');
-    b.className = 'btn small';
-    b.textContent = 'Отвязать звук от видео';
-    b.title = 'Двигать и резать картинку и звук отдельно';
-    b.onclick = () => { edCommit(); for (const x of sel) x.link = 0; edChanged(); };
-    btns.append(b);
+  if (sounds.length) {
+    section('volume', 'Громкость', rows => {
+      for (const a of sounds) {
+        if (sounds.length > 1) {
+          const n = document.createElement('div');
+          n.className = 'fx-sub';
+          n.textContent = a.track;
+          rows.append(n);
+        }
+        // the level in decibels like Premiere; 0 dB = as recorded, up to +6 dB (200%)
+        value(rows, 'Уровень', x => (x.volume > 0 ? 20 * Math.log10(x.volume) : -60), (x, n) => { x.volume = n <= -60 ? 0 : Math.pow(10, n / 20); },
+          { min: -60, max: 6, step: 0.1, unit: 'дБ', def: 0, list: [a], show: v => (v <= -60 ? '−∞' : (v >= 0 ? '+' : '') + v.toFixed(1)) });
+        value(rows, 'Нарастание', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: [a] });
+        value(rows, 'Затухание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: [a] });
+        const am = edMedia(a.media);
+        if (am && am.audio.length > 1) {
+          const row = document.createElement('label');
+          row.className = 'fx-row';
+          row.innerHTML = '<span class="fx-label">Дорожка файла</span>';
+          const s = document.createElement('select');
+          am.audio.forEach((t, k) => s.add(new Option(`${k + 1}${t.name ? ' — ' + t.name : ''}`, k)));
+          s.value = a.audioK || 0;
+          s.onchange = () => { edCommit(); a.audioK = Number(s.value); edChanged(); };
+          row.append(s);
+          rows.append(row);
+        }
+      }
+    }, () => sounds.forEach(x => { x.volume = 1; x.fadeIn = x.fadeOut = 0; }));
   }
-  const del = document.createElement('button');
-  del.className = 'btn small';
-  del.textContent = 'Удалить';
-  del.onclick = deleteSelected;
-  btns.append(del);
-  body.append(btns);
 }
 
 // ---------- preview
@@ -1081,7 +1311,24 @@ function fadeAt(c, t) {
   if (c.fadeOut > 0 && clipDur(c) - local < c.fadeOut) a = Math.min(a, (clipDur(c) - local) / c.fadeOut);
   return clamp(a, 0, 1);
 }
-const clipAt = (track, t) => ed.p.clips.find(c => c.track === track && c.start <= t && clipEnd(c) > t);
+// Motion and opacity of a picture clip, as in Premiere's Effect Controls; the position is
+// the centre of the picture in frame pixels
+const motion = c => ({
+  x: c.posX != null ? c.posX : ed.p.w / 2,
+  y: c.posY != null ? c.posY : ed.p.h / 2,
+  scale: c.scale != null ? c.scale : 100,
+  rot: c.rot || 0,
+  opacity: c.opacity != null ? c.opacity : 100,
+});
+// The same on screen: the preview is the frame shrunk to fit
+function motionCss(c, el) {
+  const mo = motion(c);
+  const k = $('#ed-screen').clientHeight / ed.p.h;
+  el.style.transform = `translate(${(mo.x - ed.p.w / 2) * k}px, ${(mo.y - ed.p.h / 2) * k}px) scale(${mo.scale / 100}) rotate(${mo.rot}deg)`;
+  return mo.opacity / 100;
+}
+
+const clipAt = (track, t) => ed.p.clips.find(c => !c.off && c.track === track && c.start <= t && clipEnd(c) > t);
 
 function syncEl(el, file, local, force) {
   const url = api.toUrl(file);
@@ -1139,19 +1386,19 @@ function syncPreview(force) {
         screen.insertBefore(img, $('#ed-titles'));
       }
       if (img.dataset.src !== m.path) { img.dataset.src = m.path; img.src = api.toUrl(m.path); }
-      img.style.opacity = fadeAt(c, t);
+      img.style.opacity = fadeAt(c, t) * motionCss(c, img);
       continue;
     }
     screen.querySelector(`img[data-track="${track}"]`)?.remove();
     el.hidden = false;
-    el.style.opacity = fadeAt(c, t);
+    el.style.opacity = fadeAt(c, t) * motionCss(c, el);
     syncEl(el, m.path, c.in + (t - c.start), force && !ed.playing);
   }
   // sound
   const live = new Set();
   for (const c of ed.p.clips) {
     const tr = trackOf(c.track);
-    if (tr.kind !== 'audio' || c.start > t || clipEnd(c) <= t) continue;
+    if (tr.kind !== 'audio' || c.off || c.start > t || clipEnd(c) <= t) continue;
     const st = ed.p.tracks[c.track];
     live.add(c.id);
     let el = edAudio.get(c.id);
@@ -1180,7 +1427,7 @@ function syncPreview(force) {
   const titles = $('#ed-titles');
   titles.innerHTML = '';
   if (!ed.p.tracks.T1.hidden) {
-    for (const c of ed.p.clips.filter(x => x.track === 'T1' && x.start <= t && clipEnd(x) > t)) {
+    for (const c of ed.p.clips.filter(x => !x.off && x.track === 'T1' && x.start <= t && clipEnd(x) > t)) {
       const d = document.createElement('div');
       d.className = 'ed-title';
       d.classList.toggle('box', c.box);
@@ -1258,6 +1505,9 @@ function edPause() {
 const edToggle = () => (ed.playing ? edPause() : edPlay());
 
 $('#ed-play').onclick = edToggle;
+$('#ed-fback').onclick = () => seekEd(ed.t - 1 / fpsOf());
+$('#ed-ffwd').onclick = () => seekEd(ed.t + 1 / fpsOf());
+$('#ed-mark-btn').onclick = () => addMarker();
 $('#ed-home').onclick = () => seekEd(0);
 $('#ed-end').onclick = () => seekEd(edDuration());
 $('#ed-screen').onclick = edToggle;
@@ -1335,7 +1585,7 @@ function setTool(tool) {
   for (const t of ['razor', 'hand', 'track']) lanesBox.classList.toggle(t, tool === t);
 }
 for (const b of document.querySelectorAll('[data-edtool]')) b.onclick = () => setTool(b.dataset.edtool);
-$('#ed-split').onclick = splitAtPlayhead;
+$('#ed-split').onclick = e => splitAtPlayhead(e.shiftKey);
 $('#ed-del').onclick = deleteSelected;
 $('#ed-text').onclick = addText;
 $('#ed-undo').onclick = () => edUndo(true);
@@ -1349,7 +1599,7 @@ document.addEventListener('keydown', e => {
   const frame = 1 / ed.p.fps;
   const keys = {
     Space: edToggle,
-    KeyS: splitAtPlayhead,
+    KeyS: () => splitAtPlayhead(e.shiftKey),
     KeyC: () => setTool('razor'),
     KeyV: () => setTool('select'),
     KeyA: () => setTool('track'),
@@ -1369,7 +1619,7 @@ document.addEventListener('keydown', e => {
   };
   let fn = keys[e.code];
   if (ctrl) {
-    fn = { KeyZ: () => edUndo(!e.shiftKey), KeyY: () => edUndo(false), KeyA: () => { ed.sel = new Set(ed.p.clips.map(c => c.id)); renderTimeline(); renderInspector(); } }[e.code];
+    fn = { KeyZ: () => edUndo(!e.shiftKey), KeyY: () => edUndo(false), KeyA: () => { ed.sel = new Set(ed.p.clips.map(c => c.id)); renderTimeline(); renderInspector(); }, KeyC: copySelected, KeyV: pasteClips, KeyM: () => $('#ed-export').click(), KeyI: () => $('#ed-import').click(), KeyX: () => { copySelected(); deleteSelected(); } }[e.code];
   }
   if (!fn) return;
   e.preventDefault();
@@ -1383,15 +1633,17 @@ function exportSpec() {
   const spec = { w: ed.p.w, h: ed.p.h, fps: ed.p.fps, duration: edDuration(), video: [], audio: [], texts: [] };
   for (const tr of ['V1', 'V2']) {
     if (ed.p.tracks[tr].hidden) continue;
-    for (const c of ed.p.clips.filter(x => x.track === tr).sort((a, b) => a.start - b.start)) {
+    for (const c of ed.p.clips.filter(x => x.track === tr && !x.off).sort((a, b) => a.start - b.start)) {
       const m = edMedia(c.media);
       if (!m || !m.video) continue;
-      spec.video.push({ file: m.path, vIndex: m.video.index, image: m.image, in: c.in, dur: clipDur(c), start: c.start, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
+      const mo = motion(c);
+      spec.video.push({ file: m.path, vIndex: m.video.index, image: m.image, in: c.in, dur: clipDur(c), start: c.start, fadeIn: c.fadeIn, fadeOut: c.fadeOut,
+        x: mo.x, y: mo.y, scale: mo.scale / 100, rot: mo.rot, opacity: mo.opacity / 100 });
     }
   }
   for (const c of ed.p.clips) {
     const st = ed.p.tracks[c.track];
-    if (trackOf(c.track).kind !== 'audio' || trackSilent(c.track)) continue;
+    if (trackOf(c.track).kind !== 'audio' || c.off || trackSilent(c.track)) continue;
     const m = edMedia(c.media);
     if (!m || !m.audio.length) continue;
     const vol = c.volume * st.volume;
@@ -1399,7 +1651,7 @@ function exportSpec() {
     spec.audio.push({ file: m.path, aIndex: m.audio[c.audioK || 0].index, in: c.in, dur: clipDur(c), start: c.start, volume: vol, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
   }
   if (!ed.p.tracks.T1.hidden) {
-    for (const c of ed.p.clips.filter(x => x.track === 'T1' && x.text.trim())) {
+    for (const c of ed.p.clips.filter(x => x.track === 'T1' && !x.off && x.text.trim())) {
       const [x, y] = titleXY(c);
       spec.texts.push({ text: c.text, start: c.start, dur: clipDur(c), size: c.size, color: c.color, x, y, box: c.box, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
     }

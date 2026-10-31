@@ -302,7 +302,7 @@ option, optgroup { background: #171922; color: var(--text); }
   animation: glow 6s ease-in-out infinite;
 }
 @keyframes glow { 50% { opacity: .55; transform: translateX(-50%) scale(1.1); } }
-#empty > *:not(.empty-glow) { position: relative; }
+#empty > *:not(.empty-glow):not(.hw-bats):not(.hw-web) { position: relative; }
 .empty-logo { width: 104px; height: 104px; margin-bottom: 10px; animation: float 4s ease-in-out infinite; filter: drop-shadow(0 14px 26px rgba(var(--accent-rgb), .35)); }
 @keyframes float { 50% { transform: translateY(-8px) rotate(-3deg); } }
 #empty h1 { margin: 0; font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -.01em; }
@@ -1352,3 +1352,29 @@ body.mini #time { font-size: 11px; }
 #news-body h4 { margin: 12px 0 5px; font-size: 13px; font-weight: 600; }
 #news-body ul { margin: 0; padding-left: 18px; color: var(--soft); }
 #news-body li { margin: 3px 0; line-height: 1.45; }
+
+/* ---------- Halloween (Oct 24 – Nov 2): bats over the start screen and the splash, a cobweb */
+.hw-only, .hw-bats, .hw-web { display: none; }
+body.halloween .hw-only { display: block; }
+body.halloween .hw-bats { display: block; position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+body.halloween .hw-web { display: block; position: absolute; top: 0; right: 0; width: 170px; height: 170px; color: rgba(255, 255, 255, .13); pointer-events: none; }
+body.halloween .empty-glow { background: radial-gradient(closest-side, rgba(255, 122, 24, .22), rgba(163, 92, 255, .12) 55%, transparent); }
+.hw-greet { margin: -4px 0 10px; font-size: 15px; font-weight: 600; background: linear-gradient(90deg, #ff7a18, #c07bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hw-bat { position: absolute; width: 46px; height: 23px; color: rgba(176, 136, 230, .55); filter: drop-shadow(0 0 8px rgba(163, 92, 255, .6)); animation: hw-fly 22s linear infinite, hw-flap .35s ease-in-out infinite alternate; }
+.hw-bat.b1 { top: 12%; animation-delay: 0s, 0s; }
+.hw-bat.b2 { top: 26%; width: 30px; height: 15px; animation-duration: 28s, .3s; animation-delay: -9s, 0s; }
+.hw-bat.b3 { top: 64%; width: 36px; height: 18px; animation-duration: 25s, .4s; animation-delay: -15s, 0s; }
+.hw-bat.b4 { top: 80%; width: 26px; height: 13px; animation-duration: 32s, .33s; animation-delay: -4s, 0s; }
+.hw-bat.b5 { top: 44%; width: 22px; height: 11px; animation-duration: 36s, .28s; animation-delay: -20s, 0s; }
+.hw-bat.b6 { top: 6%; width: 34px; height: 17px; animation-duration: 30s, .38s; animation-delay: -26s, 0s; }
+@keyframes hw-fly {
+  0% { left: -60px; transform: translateY(0); }
+  25% { transform: translateY(-28px); }
+  50% { transform: translateY(14px); }
+  75% { transform: translateY(-18px); }
+  100% { left: calc(100% + 60px); transform: translateY(0); }
+}
+@keyframes hw-flap { from { scale: 1 1; } to { scale: 1 .7; } }
+body.no-motion .hw-bat { animation: none; left: 20%; }
+body.no-motion .hw-bat.b2 { left: 70%; } body.no-motion .hw-bat.b3 { left: 85%; } body.no-motion .hw-bat.b4 { left: 40%; } body.no-motion .hw-bat.b5 { left: 60%; } body.no-motion .hw-bat.b6 { left: 8%; }
+body.halloween #empty > :not(.hw-bats):not(.hw-web):not(.empty-glow) { z-index: 1; }

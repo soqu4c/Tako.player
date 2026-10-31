@@ -39,7 +39,9 @@
     <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.4 2.5.2.3.6.3.8 0 .8-1.4 2.3-2.5 4.4-2.5 3.7 0 5.8 3.9 4.3 7.3C18.5 16.4 12 21 12 21z"/></symbol>
-    <symbol id="i-pip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2.5"/><rect x="12" y="11" width="8" height="7" rx="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6l-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></symbol>
+    <symbol id="i-pip"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2.5"/><rect x="12" y="11" width="8" height="7" rx="1.2" fill="currentColor"/></symbol>
     <symbol id="i-back"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></symbol>
     <symbol id="i-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
@@ -238,13 +240,19 @@
         </div>
         <div class="lib-tools">
           <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="lib-search" placeholder="Поиск по названию" spellcheck="false"></label>
-          <div class="segmented" id="lib-filter">
-            <button data-v="all" class="on">Всё</button><button data-v="video">Видео</button>
-          </div>
+          <select id="lib-filter" class="chip" title="Какие файлы показывать">
+            <option value="all">Все файлы</option>
+            <option value="video">Только видео</option>
+            <option value="progress">Недосмотренные</option>
+            <option value="unseen">Ещё не смотрел</option>
+            <option value="fav">★ Избранное</option>
+          </select>
           <select id="lib-sort" class="chip">
             <option value="name">По имени</option>
             <option value="new">Сначала новые</option>
             <option value="size">Сначала большие</option>
+            <option value="long">Сначала длинные</option>
+            <option value="short">Сначала короткие</option>
           </select>
           <button id="lib-refresh" class="icon" title="Обновить"><svg class="i"><use href="#i-refresh"/></svg></button>
           <button id="lib-add" class="btn accent"><svg class="i"><use href="#i-plus"/></svg>Добавить папку</button>
@@ -351,6 +359,27 @@
     <button id="ex-go" class="btn accent">Сохранить как…</button>
   </div>
 </dialog>
+
+<dialog id="confirm-dlg">
+  <h2 id="confirm-title"></h2>
+  <p id="confirm-text" class="hint"></p>
+  <div class="actions">
+    <button id="confirm-no" class="btn">Отмена</button>
+    <button id="confirm-yes" class="btn accent"></button>
+  </div>
+</dialog>
+
+<dialog id="rename-dlg">
+  <h2>Переименовать</h2>
+  <input id="rename-input" class="text-input wide-input" spellcheck="false">
+  <small id="rename-error" class="field-error"></small>
+  <div class="actions">
+    <button class="btn close-dlg">Отмена</button>
+    <button id="rename-ok" class="btn accent">Переименовать</button>
+  </div>
+</dialog>
+
+<div id="ctx-menu" hidden></div>
 
 <dialog id="names-dlg">
   <h2>Названия дорожек</h2>

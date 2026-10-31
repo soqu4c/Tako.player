@@ -142,6 +142,10 @@ function osd(text) {
 
 let toastTimer;
 function toast(text, actionLabel, action) {
+  // The toast goes where it can be seen: the fullscreen player, the library or the player view
+  const host = document.fullscreenElement
+    || (typeof currentView !== 'undefined' && currentView === 'library' ? $('#view-library') : $('#player'));
+  if ($('#toast').parentElement !== host) host.append($('#toast'));
   $('#toast-text').textContent = text;
   const btn = $('#toast-action');
   btn.hidden = !actionLabel;

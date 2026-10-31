@@ -701,6 +701,30 @@ function makeCard(f, meta, onClick, i) {
     + '<div class="play-ov"><span><svg class="i"><use href="#i-play"/></svg></span></div></div><div class="card-name"></div><div class="card-meta"></div>';
   card.querySelector('.card-name').textContent = f.name;
   card.querySelector('.card-meta').textContent = meta;
+  card.classList.toggle('fav', favorites.has(f.path));
+  // Star for favourites and a "⋯" menu; right-click opens the same menu
+  const star = document.createElement('button');
+  star.className = 'card-star';
+  star.title = 'Избранное';
+  star.innerHTML = '<svg class="i"><use href="#i-star"/></svg>';
+  star.onclick = e => {
+    e.stopPropagation();
+    toggleFavorite(f.path);
+  };
+  const more = document.createElement('button');
+  more.className = 'card-more';
+  more.title = 'Действия с файлом';
+  more.innerHTML = '<svg class="i"><use href="#i-dots"/></svg>';
+  more.onclick = e => {
+    e.stopPropagation();
+    const r = more.getBoundingClientRect();
+    fileMenu(f.path, onClick, r.left, r.bottom + 4);
+  };
+  card.querySelector('.thumb').append(star, more);
+  card.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    fileMenu(f.path, onClick, e.clientX, e.clientY);
+  });
   card.onclick = onClick;
   cardObserver.observe(card);
   return card;
@@ -726,6 +750,7 @@ async function renderRecent() {
       card.classList.add('leaving');
       setTimeout(renderRecent, 220);
     };
+    card.querySelector('.card-more').remove(); // × sits in that corner; right-click still has the menu
     card.querySelector('.thumb').append(rm);
     box.append(card);
   });
@@ -748,8 +773,9 @@ $('#recent-clear').onclick = () => {
 const lib = {
   folders: recall('libraryFolders', []),
   data: [],
-  filter: recall('libFilter', 'all') === 'video' ? 'video' : 'all',
+  filter: ['all', 'video', 'progress', 'unseen', 'fav'].includes(recall('libFilter', 'all')) ? recall('libFilter', 'all') : 'all',
   sort: recall('libSort', 'name'),
+  durations: {}, // file -> seconds, filled when sorting by length
   folder: recall('libFolder', 'all'), // 'all' or the folder shown on its own
   query: '',
   loaded: false,
@@ -761,13 +787,60 @@ async function loadLibrary() {
   lib.data = lib.folders.length ? await api.libraryScan(lib.folders) : [];
   $('#lib-refresh').classList.remove('spin');
   renderLibrary();
+  ensureDurations();
 }
 
 const SORTS = {
   name: (a, b) => collatorRu.compare(a.name, b.name),
   new: (a, b) => b.mtime - a.mtime,
   size: (a, b) => b.size - a.size,
+  long: (a, b) => (lib.durations[b.path] || 0) - (lib.durations[a.path] || 0),
+  short: (a, b) => (lib.durations[a.path] || 0) - (lib.durations[b.path] || 0),
 };
+
+// Sorting by length needs every file's duration; the missing ones are looked up once
+async function ensureDurations() {
+  if (lib.sort !== 'long' && lib.sort !== 'short') return;
+  const missing = lib.data.flatMap(s => s.files.map(f => f.path)).filter(p => !(p in lib.durations));
+  if (!missing.length) return;
+  $('#lib-count').textContent = `Узнаю длительность ${missing.length} ${plural(missing.length, 'файла', 'файлов', 'файлов')}…`;
+  Object.assign(lib.durations, await api.libraryDurations(missing));
+  renderLibrary();
+}
+
+// ---- what the filter looks at: progress, opened files, favourites
+
+const favorites = new Set(recall('favorites', []));
+
+function markOpened(file) {
+  const all = recall('opened', {});
+  delete all[file];
+  all[file] = Date.now();
+  const keys = Object.keys(all);
+  for (const k of keys.slice(0, Math.max(0, keys.length - 5000))) delete all[k];
+  store('opened', all);
+}
+video.addEventListener('loadedmetadata', () => { const item = currentItem(); if (item) markOpened(item.path); });
+
+function libPasses(f, pos, opened) {
+  switch (lib.filter) {
+    case 'video': return !f.audio;
+    case 'progress': return !!pos[f.path];
+    case 'unseen': return !opened[f.path] && !pos[f.path];
+    case 'fav': return favorites.has(f.path);
+    default: return true;
+  }
+}
+
+function toggleFavorite(file) {
+  if (favorites.has(file)) favorites.delete(file);
+  else favorites.add(file);
+  store('favorites', [...favorites]);
+  for (const c of document.querySelectorAll('.card')) {
+    if (c.dataset.path === file) c.classList.toggle('fav', favorites.has(file));
+  }
+  if (lib.filter === 'fav') renderLibrary();
+}
 
 // A library card plays its file; ⏮ ⏭ then go through the folder as it is shown
 function playFrom(files, i) {
@@ -861,6 +934,8 @@ function renderLibrary() {
   const body = $('#lib-body');
   body.innerHTML = '';
   const q = lib.query.trim().toLowerCase();
+  const pos = recall('positions', {});
+  const opened = recall('opened', {});
   if (lib.folder !== 'all' && !lib.data.some(s => s.dir === lib.folder)) lib.folder = 'all';
   const single = lib.folder !== 'all';
   let total = 0;
@@ -869,7 +944,7 @@ function renderLibrary() {
   for (const sec of lib.data) {
     total += sec.files.length;
     const files = sec.files
-      .filter(f => (lib.filter === 'all' || (lib.filter === 'audio') === f.audio) && (!q || f.name.toLowerCase().includes(q)))
+      .filter(f => libPasses(f, pos, opened) && (!q || f.name.toLowerCase().includes(q)))
       .sort(SORTS[lib.sort] || SORTS.name);
     counts.push({ sec, n: files.length });
     if (single && sec.dir !== lib.folder) continue;
@@ -1002,22 +1077,167 @@ $('#lib-search').addEventListener('input', e => {
 });
 $('#lib-search').addEventListener('keydown', e => { if (e.key === 'Escape') e.target.blur(); });
 
-for (const b of $('#lib-filter').children) {
-  b.classList.toggle('on', b.dataset.v === lib.filter);
-  b.onclick = () => {
-    lib.filter = b.dataset.v;
-    store('libFilter', lib.filter);
-    for (const x of $('#lib-filter').children) x.classList.toggle('on', x === b);
-    renderLibrary();
-  };
-}
+$('#lib-filter').value = lib.filter;
+$('#lib-filter').addEventListener('change', e => {
+  lib.filter = e.target.value;
+  store('libFilter', lib.filter);
+  renderLibrary();
+  e.target.blur();
+});
 $('#lib-sort').value = lib.sort;
 $('#lib-sort').addEventListener('change', e => {
   lib.sort = e.target.value;
   store('libSort', lib.sort);
   renderLibrary();
+  ensureDurations();
   e.target.blur();
 });
+
+// ---------- file actions: context menu, rename, recycle bin
+
+const ctxMenu = $('#ctx-menu');
+
+function closeCtxMenu() {
+  ctxMenu.hidden = true;
+}
+
+function openCtxMenu(x, y, items) {
+  ctxMenu.innerHTML = '';
+  for (const it of items) {
+    if (it === '-') {
+      ctxMenu.append(Object.assign(document.createElement('div'), { className: 'ctx-sep' }));
+      continue;
+    }
+    const b = document.createElement('button');
+    b.className = it.danger ? 'danger' : '';
+    b.innerHTML = `<svg class="i"><use href="#${it.icon}"/></svg><span></span>`;
+    b.querySelector('span').textContent = it.label;
+    b.onclick = () => {
+      closeCtxMenu();
+      it.run();
+    };
+    ctxMenu.append(b);
+  }
+  ctxMenu.hidden = false;
+  // Keep the menu inside the window
+  const r = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+  ctxMenu.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+}
+
+document.addEventListener('pointerdown', e => { if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) closeCtxMenu(); }, true);
+window.addEventListener('keydown', e => {
+  if (ctxMenu.hidden || e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeCtxMenu();
+}, true);
+$('#lib-body').addEventListener('scroll', closeCtxMenu);
+
+function confirmDialog(title, text, yes) {
+  const dlg = $('#confirm-dlg');
+  $('#confirm-title').textContent = title;
+  $('#confirm-text').textContent = text;
+  $('#confirm-yes').textContent = yes;
+  dlg.showModal();
+  return new Promise(resolve => {
+    const done = v => {
+      $('#confirm-yes').onclick = $('#confirm-no').onclick = dlg.onclose = null;
+      if (dlg.open) dlg.close();
+      resolve(v);
+    };
+    $('#confirm-yes').onclick = () => done(true);
+    $('#confirm-no').onclick = () => done(false);
+    dlg.onclose = () => done(false);
+  });
+}
+
+// Records kept by path (progress, track names, opened, favourites) follow a renamed file
+function moveFileRecords(from, to) {
+  for (const key of ['positions', 'trackNames', 'opened']) {
+    const all = recall(key, {});
+    if (from in all) {
+      all[to] = all[from];
+      delete all[from];
+      store(key, all);
+    }
+  }
+  if (favorites.delete(from)) {
+    favorites.add(to);
+    store('favorites', [...favorites]);
+  }
+}
+
+function dropFileRecords(file) {
+  for (const key of ['positions', 'trackNames', 'opened']) {
+    const all = recall(key, {});
+    if (file in all) {
+      delete all[file];
+      store(key, all);
+    }
+  }
+  if (favorites.delete(file)) store('favorites', [...favorites]);
+}
+
+// Windows will not move or delete a file the player has open, so the player closes it first
+function releaseIfOpen(file) {
+  const item = currentItem();
+  if (!item || item.path.toLowerCase() !== file.toLowerCase()) return;
+  savePosition();
+  closeVideo();
+}
+
+async function renameFile(file) {
+  const dlg = $('#rename-dlg');
+  const input = $('#rename-input');
+  const ext = file.slice(file.lastIndexOf('.'));
+  input.value = api.basename(file).slice(0, -ext.length);
+  $('#rename-error').textContent = '';
+  dlg.showModal();
+  input.focus();
+  input.select();
+  const submit = async () => {
+    releaseIfOpen(file);
+    try {
+      const to = await api.renameFile({ file, name: input.value });
+      moveFileRecords(file, to);
+      dlg.close();
+      await loadLibrary();
+      renderRecent();
+    } catch (e) {
+      $('#rename-error').textContent = 'Не получилось: ' + cleanErr(e);
+    }
+  };
+  $('#rename-ok').onclick = submit;
+  input.onkeydown = e => { if (e.key === 'Enter') submit(); };
+}
+
+async function trashFile(file) {
+  const ok = await confirmDialog('Удалить в корзину?', `«${api.basename(file)}» отправится в корзину Windows — оттуда его можно вернуть.`, 'Удалить в корзину');
+  if (!ok) return;
+  releaseIfOpen(file);
+  try {
+    await api.trashFile(file);
+    dropFileRecords(file);
+    toast(`«${api.basename(file)}» в корзине`);
+    await loadLibrary();
+    renderRecent();
+  } catch (e) {
+    toast('Не получилось удалить: ' + cleanErr(e));
+  }
+}
+
+function fileMenu(file, play, x, y) {
+  openCtxMenu(x, y, [
+    { icon: 'i-play', label: 'Смотреть', run: play },
+    { icon: 'i-star', label: favorites.has(file) ? 'Убрать из избранного' : 'В избранное', run: () => toggleFavorite(file) },
+    '-',
+    { icon: 'i-edit', label: 'Переименовать…', run: () => renameFile(file) },
+    { icon: 'i-folder', label: 'Показать в папке', run: () => api.reveal(file) },
+    '-',
+    { icon: 'i-trash', label: 'Удалить в корзину…', danger: true, run: () => trashFile(file) },
+  ]);
+}
 
 // ---------- drawing on a paused frame
 //

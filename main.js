@@ -513,6 +513,55 @@ ipcMain.handle('library-scan', (_e, folders) => folders.map(dir => ({
 
 ipcMain.handle('library-thumb', (_e, file) => withThumbSlot(() => libraryThumb(file)));
 
+// ---------- files in the library: recycle bin, renaming, durations for sorting
+
+ipcMain.handle('trash-file', async (_e, file) => {
+  await shell.trashItem(file);
+});
+
+const BAD_NAME = /[\\/:*?"<>|]/;
+
+// `name` may come with or without the extension; the file keeps its own extension
+ipcMain.handle('rename-file', (_e, { file, name }) => {
+  const ext = path.extname(file);
+  let base = String(name).trim();
+  if (base.toLowerCase().endsWith(ext.toLowerCase())) base = base.slice(0, -ext.length).trim();
+  if (!base || /^\.+$/.test(base)) throw new Error('имя не может быть пустым');
+  if (BAD_NAME.test(base)) throw new Error('в имени нельзя использовать \\ / : * ? " < > |');
+  const target = path.join(path.dirname(file), base + ext);
+  if (target === file) return file;
+  // Only the letter case may change for a name that already exists (the same file)
+  if (fs.existsSync(target) && target.toLowerCase() !== file.toLowerCase()) throw new Error('файл с таким именем уже есть');
+  fs.renameSync(file, target);
+  return target;
+});
+
+// Durations for sorting: from the thumbnail cache when it has them, else a quick ffprobe
+ipcMain.handle('library-durations', async (_e, files) => {
+  const out = {};
+  let next = 0;
+  const worker = async () => {
+    while (next < files.length) {
+      const file = files[next++];
+      try {
+        const st = fs.statSync(file);
+        const key = crypto.createHash('sha1').update([file, st.size, st.mtimeMs].join('|')).digest('hex').slice(0, 16);
+        const meta = path.join(thumbDir(), key + '.json');
+        if (fs.existsSync(meta)) {
+          out[file] = JSON.parse(fs.readFileSync(meta, 'utf8')).duration || 0;
+        } else {
+          const d = await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]);
+          out[file] = parseFloat(d.toString()) || 0;
+        }
+      } catch {
+        out[file] = 0;
+      }
+    }
+  };
+  await Promise.all([1, 2, 3, 4].map(worker));
+  return out;
+});
+
 ipcMain.handle('frame-thumb', async (_e, { file, time }) => {
   const img = await grabFrame(file, time, 320);
   return img ? 'data:image/jpeg;base64,' + img.toString('base64') : null;

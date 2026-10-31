@@ -805,6 +805,24 @@ body.drawing #controls { display: none; }
 .folder-tab:hover { background: rgba(255, 255, 255, .09); color: var(--text); }
 .folder-tab.on { background: var(--accent-soft); color: #fff; box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .45); }
 .folder-tab.on .n { background: var(--accent); color: #fff; }
+.lib-foldable > .lib-section-head, .lib-foldable > .lib-sub { cursor: pointer; }
+.lib-section-head button.icon.fold-btn { opacity: 1; margin-left: -6px; }
+.fold-btn .i { transition: transform .3s var(--ease); }
+.folded > * > .fold-btn .i { transform: rotate(-90deg); }
+.lib-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .35s var(--ease); }
+.folded > .lib-fold { grid-template-rows: 0fr; }
+/* room for the cards' hover lift and shadow inside the clipping box */
+.lib-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px 6px 10px;
+  margin: -6px -6px -10px;
+  transition: padding .35s var(--ease), margin .35s var(--ease), visibility 0s;
+}
+.folded > .lib-fold > .lib-fold-inner { padding: 0 6px; margin: 0 -6px; visibility: hidden; transition: padding .35s var(--ease), margin .35s var(--ease), visibility 0s .35s; }
+.lib-section.folded { margin-bottom: 10px; }
+.lib-group.folded .lib-sub { margin-bottom: 4px; }
+.lib-sub .fold-btn { margin-left: -6px; }
 .lib-section-head h2.link { cursor: pointer; transition: color .15s; }
 .lib-section-head h2.link:hover { color: var(--accent); }
 .lib-sub { display: flex; align-items: center; gap: 8px; margin: 20px 0 12px; font-size: 13.5px; font-weight: 600; color: var(--soft); }

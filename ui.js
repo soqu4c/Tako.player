@@ -810,6 +810,42 @@ function renderFolderTabs(counts) {
   for (const { sec, n } of counts) tab(sec.dir, sec.name, n);
 }
 
+// Folders (and subfolder groups) fold down to their heading; the choice is remembered
+const libFolded = new Set(recall('libCollapsed', []));
+
+function makeFoldable(wrap, header, content, key) {
+  const btn = document.createElement('button');
+  btn.className = 'icon sm fold-btn';
+  btn.innerHTML = '<svg class="i"><use href="#i-chevron"/></svg>';
+  header.prepend(btn);
+  const fold = document.createElement('div');
+  fold.className = 'lib-fold';
+  const inner = document.createElement('div');
+  inner.className = 'lib-fold-inner';
+  inner.append(...content);
+  fold.append(inner);
+  wrap.classList.add('lib-foldable');
+  wrap.append(header, fold);
+  const sync = () => {
+    const folded = libFolded.has(key);
+    wrap.classList.toggle('folded', folded);
+    btn.title = folded ? 'Развернуть папку' : 'Свернуть папку';
+  };
+  const toggle = () => {
+    if (libFolded.has(key)) libFolded.delete(key);
+    else libFolded.add(key);
+    store('libCollapsed', [...libFolded]);
+    sync();
+  };
+  btn.onclick = e => {
+    e.stopPropagation();
+    toggle();
+  };
+  // The empty part of the heading folds too; the name and buttons keep their own actions
+  header.addEventListener('click', e => { if (!e.target.closest('button, .link')) toggle(); });
+  sync();
+}
+
 function libGrid(cards) {
   const grid = document.createElement('div');
   grid.className = 'cards';
@@ -864,7 +900,7 @@ function renderLibrary() {
       renderLibrary();
     };
     head.append(h, count, where, rm);
-    section.append(head);
+    const content = [];
 
     const card = (f, i) => {
       const sub = subfolderOf(sec, f);
@@ -876,7 +912,7 @@ function renderLibrary() {
       const none = document.createElement('div');
       none.className = 'lib-none';
       none.textContent = 'В этой папке нет видео и музыки';
-      section.append(none);
+      content.push(none);
     } else if (!single) {
       // A preview of each folder; the rest is one click away
       const cards = files.slice(0, PREVIEW_CARDS).map(card);
@@ -889,7 +925,7 @@ function renderLibrary() {
         more.onclick = () => openLibFolder(sec.dir);
         cards.push(more);
       }
-      section.append(libGrid(cards));
+      content.push(libGrid(cards));
     } else {
       // One folder: its own files first, then each subfolder under its own heading
       const groups = new Map();
@@ -900,17 +936,25 @@ function renderLibrary() {
       }
       const order = [...groups.keys()].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : collatorRu.compare(a, b)));
       for (const sub of order) {
-        if (groups.size > 1) {
-          const sh = document.createElement('h3');
-          sh.className = 'lib-sub';
-          sh.innerHTML = '<svg class="i"><use href="#i-folder"/></svg><span></span><small></small>';
-          sh.querySelector('span').textContent = sub || 'В самой папке';
-          sh.querySelector('small').textContent = groups.get(sub).length;
-          section.append(sh);
+        const grid = libGrid(groups.get(sub).map(card));
+        if (groups.size < 2) {
+          content.push(grid);
+          continue;
         }
-        section.append(libGrid(groups.get(sub).map(card)));
+        const sh = document.createElement('h3');
+        sh.className = 'lib-sub';
+        sh.innerHTML = '<svg class="i"><use href="#i-folder"/></svg><span></span><small></small>';
+        sh.querySelector('span').textContent = sub || 'В самой папке';
+        sh.querySelector('small').textContent = groups.get(sub).length;
+        const group = document.createElement('div');
+        group.className = 'lib-group';
+        makeFoldable(group, sh, [grid], `${sec.dir}|${sub}`);
+        content.push(group);
       }
     }
+    // On a folder's own tab the folder itself stays open; its subfolders fold instead
+    if (single) section.append(head, ...content);
+    else makeFoldable(section, head, content, sec.dir);
     body.append(section);
   }
   renderFolderTabs(counts);

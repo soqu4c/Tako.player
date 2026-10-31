@@ -1975,6 +1975,7 @@ function renderMarkerList() {
   const list = fileMarkers();
   const box = $('#mk-list');
   box.innerHTML = '';
+  $('#mk-len').textContent = `(клип длиной ${fmt(mk.before + mk.after)})`;
   if (!list.length) box.innerHTML = '<div class="mk-empty">Меток пока нет. Нажмите <kbd>B</kbd> во время просмотра, чтобы отметить момент.</div>';
   list.forEach((t, i) => {
     const [a, b] = clipRange(t);
@@ -1986,7 +1987,7 @@ function renderMarkerList() {
     row.querySelector('input').dataset.t = t;
     row.querySelector('.mk-n').textContent = `Метка ${i + 1}`;
     row.querySelector('.mk-t').textContent = fmt(t);
-    row.querySelector('small').textContent = `клип ${fmt(a)} – ${fmt(b)}`;
+    row.querySelector('small').textContent = `в клип: ${fmt(a)} – ${fmt(b)}`;
     row.querySelector('.mk-go').onclick = () => {
       $('#markers-dlg').close();
       video.currentTime = t;

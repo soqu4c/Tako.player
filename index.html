@@ -400,10 +400,14 @@
 
 <dialog id="markers-dlg">
   <h2>Метки</h2>
-  <p class="hint">Ставьте метки клавишей <kbd>B</kbd> во время просмотра — из отмеченных здесь получатся отдельные клипы.</p>
-  <div class="mk-around">Клип вокруг метки:
-    <input id="mk-before" class="time-input mk-num" type="number" min="0" max="600" step="1"> с до и
-    <input id="mk-after" class="time-input mk-num" type="number" min="1" max="600" step="1"> с после
+  <p class="hint">Ставьте метки клавишей <kbd>B</kbd> во время просмотра — из каждой отмеченной галочкой метки получится отдельный короткий клип.</p>
+  <div class="mk-around">
+    <span>Клип начнётся за</span>
+    <input id="mk-before" class="time-input mk-num" type="number" min="0" max="600" step="1">
+    <span>сек. до метки и закончится через</span>
+    <input id="mk-after" class="time-input mk-num" type="number" min="1" max="600" step="1">
+    <span>сек. после неё</span>
+    <span id="mk-len" class="mk-len"></span>
   </div>
   <div id="mk-list"></div>
   <div class="mk-options">

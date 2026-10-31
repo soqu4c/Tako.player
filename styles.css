@@ -794,6 +794,7 @@ body.ctl-mini .marker { top: 2px; width: 8px; height: 8px; margin-left: -4px; }
 }
 .mk-around { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--soft); margin-bottom: 14px; }
 .mk-num { width: 64px; }
+.mk-len { color: var(--muted); }
 #mk-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; margin-bottom: 14px; }
 .mk-row { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, .04); }
 .mk-row label { flex: 1; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--soft); }

@@ -1192,6 +1192,9 @@ dialog h2 { margin: 0 0 18px; font-size: 19px; font-weight: 700; }
 #ex-status { color: var(--muted); }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .actions .spacer { flex: 1; }
+#markers-dlg { width: min(680px, 94vw); }
+.actions { flex-wrap: wrap; }
+.actions .btn { white-space: nowrap; }
 
 .hint { color: var(--muted); margin: -8px 0 16px; }
 #names-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }

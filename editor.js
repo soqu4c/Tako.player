@@ -757,17 +757,22 @@ $('#ed-tc').addEventListener('blur', () => { $('#ed-tc').value = tc(ed.t); });
 $('#ed-tc').addEventListener('focus', e => e.target.select());
 
 // Zoom: 0.02…400 px per second (a whole long recording fits, or single frames)
+// The browser keeps scrollLeft in whole pixels; zooming step after step from the rounded
+// value made the point under the mouse creep away, so the exact value is kept between steps
 function setZoom(pps, anchorT = ed.t) {
-  const before = xOf(anchorT) - scroller.scrollLeft;
+  const sl = ed.slExact != null && Math.abs(ed.slExact - scroller.scrollLeft) < 1 ? ed.slExact : scroller.scrollLeft;
+  const before = xOf(anchorT) - sl;
   ed.pps = clamp(pps, 0.02, 400);
   renderTimeline();
-  scroller.scrollLeft = xOf(anchorT) - before;
+  ed.slExact = Math.max(0, xOf(anchorT) - before);
+  scroller.scrollLeft = ed.slExact;
 }
 scroller.addEventListener('wheel', e => {
   if (!e.ctrlKey && !e.altKey) return;
   e.preventDefault();
   const r = scroller.getBoundingClientRect();
-  setZoom(ed.pps * (e.deltaY < 0 ? 1.2 : 1 / 1.2), tOf(e.clientX - r.left + scroller.scrollLeft));
+  const sl = ed.slExact != null && Math.abs(ed.slExact - scroller.scrollLeft) < 1 ? ed.slExact : scroller.scrollLeft;
+  setZoom(ed.pps * (e.deltaY < 0 ? 1.2 : 1 / 1.2), tOf(e.clientX - r.left + sl));
 }, { passive: false });
 // Backslash fits the whole edit, as in Premiere
 const zoomToFit = () => { setZoom((scroller.clientWidth - 40) / Math.max(1, edDuration()), 0); scroller.scrollLeft = 0; };

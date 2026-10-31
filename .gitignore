@@ -10,3 +10,5 @@ test-update/
 Thumbs.db
 desktop.ini
 *.log
+.test/
+build-tmp/

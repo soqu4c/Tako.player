@@ -3,6 +3,7 @@ node_modules/
 
 # build output — installers go to GitHub Releases instead
 dist/
+test-update/
 
 # editor and OS clutter
 .vscode/

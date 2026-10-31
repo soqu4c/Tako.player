@@ -364,6 +364,40 @@
   </div>
 </dialog>
 
+<dialog id="asr-dlg">
+  <h2>Распознать речь</h2>
+  <p class="hint">Субтитры из голоса, прямо на компьютере, без интернета. Файл субтитров сохранится рядом с видео и сразу включится.</p>
+  <div class="field">
+    <div class="label">Дорожка</div>
+    <select id="asr-track"></select>
+  </div>
+  <div class="field">
+    <div class="label">Что распознать</div>
+    <label><input type="radio" name="asr-range" value="sel" id="asr-range-sel"> <span id="asr-range-sel-text">Выделенный фрагмент</span></label>
+    <label><input type="radio" name="asr-range" value="all" id="asr-range-all"> <span id="asr-range-all-text">Весь файл</span></label>
+  </div>
+  <div class="field">
+    <div class="label">Язык речи</div>
+    <select id="asr-lang">
+      <option value="ru">Русский</option>
+      <option value="en">English</option>
+      <option value="auto">Определить автоматически</option>
+    </select>
+  </div>
+  <div class="asr-model">
+    <div id="asr-model-text"></div>
+    <button id="asr-dir" class="btn small">Другая папка…</button>
+  </div>
+  <div id="asr-progress" hidden>
+    <div class="progress"><div id="asr-bar"></div></div>
+    <span id="asr-status"></span>
+  </div>
+  <div class="actions">
+    <button id="asr-cancel" class="btn">Отмена</button>
+    <button id="asr-go" class="btn accent">Распознать</button>
+  </div>
+</dialog>
+
 <dialog id="markers-dlg">
   <h2>Метки</h2>
   <p class="hint">Ставьте метки клавишей <kbd>B</kbd> во время просмотра — из отмеченных здесь получатся отдельные клипы.</p>
@@ -455,6 +489,7 @@
     <tr><td><kbd>M</kbd></td><td>Без звука</td></tr>
     <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Медленнее / быстрее</td></tr>
     <tr><td><kbd>A</kbd> <kbd>S</kbd></td><td>Следующая аудиодорожка / субтитры</td></tr>
+    <tr><td><kbd>Shift+S</kbd></td><td>Распознать речь — субтитры из голоса</td></tr>
     <tr><td><kbd>N</kbd></td><td>Дорожки: подписать или удалить из файла</td></tr>
     <tr><td><kbd>T</kbd></td><td>Открыть / закрыть обрезку</td></tr>
     <tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Начало / конец фрагмента на текущем моменте</td></tr>

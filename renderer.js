@@ -438,8 +438,10 @@ function fillTracks() {
     }
     sub.add(o);
   });
+  sub.add(new Option('Распознать речь…', 'asr'));
   sub.add(new Option('Загрузить из файла…', 'file'));
   sub.value = 'off';
+  state.subVal = 'off';
 }
 
 function selectAudio(k) {
@@ -881,6 +883,13 @@ async function activateSub(key, label, loader) {
 
 async function selectSub(val) {
   const sel = $('#sub-select');
+  if (val === 'asr') {
+    // Not a track: the list goes back to what was shown and the recognizer opens
+    sel.value = state.subVal || 'off';
+    openAsr();
+    return;
+  }
+  if (val !== 'file') state.subVal = val;
   if (val === 'off') {
     disableSubs();
     osd('Субтитры выключены');
@@ -908,7 +917,8 @@ function loadExternalSub(p) {
   const sel = $('#sub-select');
   const val = 'x:' + p;
   if (![...sel.options].some(o => o.value === val)) {
-    sel.add(new Option(api.basename(p), val), sel.options[sel.options.length - 1]);
+    // Loaded files go above the "recognize" and "load from file" entries
+    sel.add(new Option(api.basename(p), val), [...sel.options].find(o => o.value === 'asr' || o.value === 'file'));
   }
   sel.value = val;
   return selectSub(val);
@@ -916,7 +926,7 @@ function loadExternalSub(p) {
 
 function cycleSub() {
   const sel = $('#sub-select');
-  const opts = [...sel.options].filter(o => !o.disabled && o.value !== 'file');
+  const opts = [...sel.options].filter(o => !o.disabled && o.value !== 'file' && o.value !== 'asr');
   if (opts.length < 2) return;
   const i = opts.findIndex(o => o.value === sel.value);
   sel.value = opts[(i + 1) % opts.length].value;
@@ -1606,7 +1616,7 @@ document.addEventListener('keydown', e => {
     BracketLeft: () => changeSpeed(-1),
     BracketRight: () => changeSpeed(1),
     KeyA: () => selectAudio((state.audioK + 1) % Math.max(1, state.audioStreams.length)),
-    KeyS: cycleSub,
+    KeyS: () => (e.shiftKey ? openAsr() : cycleSub()),
     KeyI: () => { setIn(video.currentTime); osd('Начало: ' + fmtPrecise(video.currentTime)); },
     KeyO: () => { setOut(video.currentTime); osd('Конец: ' + fmtPrecise(video.currentTime)); },
     KeyP: playSelection,

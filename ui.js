@@ -33,6 +33,7 @@ const DEFAULTS = {
   accent: 'salsa', preview: true, hideDelay: 2.5, motion: true, splash: true,
   subSize: 'm', subColor: '#ffffff', subBg: 'soft', obsNames: true,
   discord: true, discordName: false,
+  asrDir: '', // folder for the speech recognizer and its model; empty = default (E:\Tako.player\models)
 };
 const settings = { ...DEFAULTS, ...recall('settings', {}) };
 
@@ -104,6 +105,7 @@ const SETTING_TABS = [
       { key: 'subSize', type: 'segment', label: 'Размер текста', options: [['s', 'Мелкий'], ['m', 'Средний'], ['l', 'Крупный'], ['xl', 'Огромный']] },
       { key: 'subColor', type: 'colors', label: 'Цвет текста', options: [['#ffffff', 'Белый'], ['#ffe45c', 'Жёлтый'], ['#7cf0c4', 'Мятный'], ['#9fd2ff', 'Голубой']] },
       { key: 'subBg', type: 'segment', label: 'Подложка', options: [['none', 'Нет'], ['soft', 'Лёгкая'], ['solid', 'Плотная']] },
+      { type: 'asrdir' },
     ],
   },
   {
@@ -209,6 +211,37 @@ async function renderSettings(tabId = settingsTab) {
   for (const row of tab.rows) {
     if (row.type === 'obsinfo') {
       panel.append(obsInfo());
+      continue;
+    }
+    if (row.type === 'asrdir') {
+      // Where the speech recognizer and its model live
+      const el = document.createElement('div');
+      el.className = 'set-row';
+      el.innerHTML = '<div class="txt"><div>Папка для распознавания речи</div><small></small></div><div class="asr-dir-btns"></div>';
+      const info = await api.asrInfo(settings.asrDir || null);
+      el.querySelector('small').textContent = `${info.dir}${info.ready ? ' · модель скачана' : ` · модель (${info.modelMB} МБ) скачается при первом распознавании`}`;
+      const change = document.createElement('button');
+      change.className = 'btn small';
+      change.textContent = 'Изменить…';
+      change.onclick = async () => {
+        const dir = await api.asrPickDir();
+        if (dir) {
+          setSetting('asrDir', dir);
+          renderSettings('subs');
+        }
+      };
+      el.querySelector('.asr-dir-btns').append(change);
+      if (settings.asrDir) {
+        const reset = document.createElement('button');
+        reset.className = 'btn small ghost';
+        reset.textContent = 'По умолчанию';
+        reset.onclick = () => {
+          setSetting('asrDir', '');
+          renderSettings('subs');
+        };
+        el.querySelector('.asr-dir-btns').append(reset);
+      }
+      panel.append(el);
       continue;
     }
     if (row.type === 'subdemo') {
@@ -2096,6 +2129,101 @@ $('#mk-concat').onclick = async () => {
   if (out) concatMarkers(out);
 };
 $('#btn-markers').onclick = openMarkers;
+
+// ---------- automatic subtitles from speech
+
+const asr = { running: null, stage: '', lastRange: null };
+const ASR_STAGES = {
+  program: 'Скачиваю распознаватель речи (9 МБ, один раз)',
+  model: 'Скачиваю модель распознавания (488 МБ, один раз)',
+  audio: 'Готовлю звук',
+  recognize: 'Распознаю речь',
+};
+
+async function asrDir() {
+  return (await api.asrInfo(settings.asrDir || null)).dir;
+}
+
+async function renderAsrModel() {
+  const info = await api.asrInfo(settings.asrDir || null);
+  $('#asr-model-text').textContent = info.ready
+    ? `Модель готова: ${info.dir}`
+    : `При первом запуске скачается модель (${info.modelMB} МБ) в ${info.dir}`;
+}
+
+function openAsr() {
+  if (!state.info) return;
+  if (!state.audioStreams.length) return toast('В этом файле нет звука');
+  video.pause();
+  const track = $('#asr-track');
+  track.innerHTML = '';
+  state.audioStreams.forEach((s, k) => track.add(new Option(streamLabel(s, k), s.index)));
+  track.value = state.audioStreams[state.audioK].index;
+  const r = selRange();
+  $('#asr-range-sel').disabled = !r;
+  $('#asr-range-sel-text').textContent = r ? `Выделенный фрагмент: ${fmt(r[0])} – ${fmt(r[1])}` : 'Выделенный фрагмент (не отмечен)';
+  $('#asr-range-all-text').textContent = `Весь файл, ${fmt(duration())} — на длинной записи это займёт заметное время`;
+  (r ? $('#asr-range-sel') : $('#asr-range-all')).checked = true;
+  $('#asr-lang').value = recall('asrLang', 'ru');
+  $('#asr-progress').hidden = !asr.running;
+  $('#asr-go').disabled = !!asr.running;
+  renderAsrModel();
+  $('#asr-dlg').showModal();
+}
+
+function showAsrProgress(value, stage) {
+  if (stage) asr.stage = stage;
+  const pct = Math.round(value * 100);
+  $('#asr-bar').style.width = pct + '%';
+  $('#asr-status').textContent = `${ASR_STAGES[asr.stage] || ''}… ${pct}%`;
+}
+api.onAsrProgress(({ jobId, value, stage }) => { if (jobId === asr.running) showAsrProgress(value, stage); });
+api.onProgress(({ jobId, value }) => { if (jobId === asr.running && asr.stage === 'audio') showAsrProgress(value); });
+
+async function runAsr() {
+  const item = currentItem();
+  if (!item || asr.running) return;
+  const r = $('#asr-range-sel').checked ? selRange() : null;
+  const lang = $('#asr-lang').value;
+  store('asrLang', lang);
+  const jobId = newJob();
+  asr.running = jobId;
+  asr.stage = '';
+  $('#asr-progress').hidden = false;
+  $('#asr-go').disabled = true;
+  $('#asr-cancel').textContent = 'Остановить';
+  showAsrProgress(0, 'audio');
+  try {
+    const res = await api.asrRun({
+      jobId, file: item.path, index: Number($('#asr-track').value), lang,
+      start: r ? r[0] : 0, end: r ? r[1] : null, dir: await asrDir(),
+    });
+    $('#asr-dlg').close();
+    if (currentItem() && currentItem().path === item.path) await loadExternalSub(res.out);
+    toast(res.lines ? `Готово: ${res.lines} ${plural(res.lines, 'строка', 'строки', 'строк')} субтитров` : 'Речь не найдена — субтитры пустые', 'Показать файл', () => api.reveal(res.out));
+  } catch (e) {
+    const msg = cleanErr(e);
+    $('#asr-status').textContent = msg === 'Отменено' ? 'Остановлено' : 'Не получилось: ' + msg;
+  } finally {
+    asr.running = null;
+    $('#asr-go').disabled = false;
+    $('#asr-cancel').textContent = 'Отмена';
+    renderAsrModel();
+  }
+}
+
+$('#asr-go').onclick = runAsr;
+$('#asr-cancel').onclick = () => {
+  if (asr.running) api.cancel(asr.running);
+  else $('#asr-dlg').close();
+};
+$('#asr-dlg').addEventListener('cancel', e => { if (asr.running) e.preventDefault(); });
+$('#asr-dir').onclick = async () => {
+  const dir = await api.asrPickDir();
+  if (!dir) return;
+  setSetting('asrDir', dir);
+  renderAsrModel();
+};
 
 // ---------- dragging files out to Discord, Telegram, Explorer
 //

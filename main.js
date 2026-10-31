@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const net = require('net');
+const https = require('https');
 const { spawn } = require('child_process');
 
 const FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
@@ -587,6 +588,181 @@ ipcMain.on('waveform-cancel', (_e, id) => {
   if (!p) return;
   p.cancelled = true;
   p.kill();
+});
+
+// ---------- speech recognition (whisper.cpp) for automatic subtitles
+//
+// The recognizer and the model are downloaded once into a folder the user picks (by default
+// on drive E:, which has room) and checked against known SHA-256 sums. The chosen audio track
+// is turned into 16 kHz mono WAV, whisper-cli writes an SRT, and the times are shifted when
+// only a fragment was recognized.
+
+const WHISPER = {
+  build: 'b5454',
+  zip: {
+    url: 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip',
+    sha256: '6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb',
+  },
+  model: {
+    file: 'ggml-small.bin',
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+    sha256: '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
+    size: 487601967,
+  },
+};
+
+const defaultModelsDir = () => (fs.existsSync('E:\\') ? 'E:\\Tako.player\\models' : path.join(app.getPath('userData'), 'models'));
+const whisperExe = dir => path.join(dir, `whisper-${WHISPER.build}`, 'Release', 'whisper-cli.exe');
+const whisperModel = dir => path.join(dir, WHISPER.model.file);
+
+function asrProgress(jobId, value, stage) {
+  if (win) win.webContents.send('asr-progress', { jobId, value, stage });
+}
+
+// GET with redirects into `dest`, hashing on the way; the file appears only once the sum matches
+function download(url, dest, sha256, jobId, stage) {
+  return new Promise((resolve, reject) => {
+    const part = dest + '.part';
+    const job = { cancelled: false, kill: () => { job.req && job.req.destroy(); } };
+    jobs.set(jobId, job);
+    const fail = err => {
+      jobs.delete(jobId);
+      fs.rmSync(part, { force: true });
+      reject(job.cancelled ? new Error('Отменено') : err);
+    };
+    const get = (u, hops) => {
+      job.req = https.get(u, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` } }, res => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
+          res.resume();
+          return get(new URL(res.headers.location, u).toString(), hops + 1);
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return fail(new Error(`сервер ответил ${res.statusCode}`));
+        }
+        const total = Number(res.headers['content-length']) || 0;
+        const hash = crypto.createHash('sha256');
+        const outStream = fs.createWriteStream(part);
+        let got = 0;
+        let last = 0;
+        res.on('data', d => {
+          hash.update(d);
+          got += d.length;
+          if (total && Date.now() - last > 300) {
+            last = Date.now();
+            asrProgress(jobId, got / total, stage);
+          }
+        });
+        res.on('error', fail);
+        res.pipe(outStream);
+        outStream.on('error', fail);
+        outStream.on('finish', () => {
+          if (job.cancelled) return fail(new Error('Отменено'));
+          if (hash.digest('hex') !== sha256) return fail(new Error('скачанный файл повреждён (контрольная сумма не совпала)'));
+          jobs.delete(jobId);
+          fs.renameSync(part, dest);
+          resolve(dest);
+        });
+      });
+      job.req.on('error', err => fail(new Error('нет связи: ' + err.message)));
+    };
+    get(url, 0);
+  });
+}
+
+ipcMain.handle('asr-info', (_e, dir) => {
+  const d = dir || defaultModelsDir();
+  return { dir: d, defaultDir: defaultModelsDir(), ready: fs.existsSync(whisperExe(d)) && fs.existsSync(whisperModel(d)), modelMB: Math.round(WHISPER.model.size / 1e6) };
+});
+
+ipcMain.handle('asr-pick-dir', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+});
+
+// Downloads whatever is missing: the recognizer (unpacked with Windows' own tar) and the model
+async function asrEnsure(dir, jobId) {
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(whisperExe(dir))) {
+    const zip = path.join(dir, `whisper-${WHISPER.build}.zip`);
+    await download(WHISPER.zip.url, zip, WHISPER.zip.sha256, jobId, 'program');
+    const target = path.join(dir, `whisper-${WHISPER.build}`);
+    fs.mkdirSync(target, { recursive: true });
+    await run(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', target]);
+    fs.rmSync(zip, { force: true });
+    if (!fs.existsSync(whisperExe(dir))) throw new Error('в архиве распознавателя не нашлось whisper-cli.exe');
+  }
+  if (!fs.existsSync(whisperModel(dir))) {
+    const free = (() => { try { const d = fs.statfsSync(dir); return d.bavail * d.bsize; } catch { return Infinity; } })();
+    if (free < WHISPER.model.size + 100e6) throw new Error(`в папке для модели не хватает места: нужно около ${Math.ceil(WHISPER.model.size / 1e6)} МБ`);
+    await download(WHISPER.model.url, whisperModel(dir), WHISPER.model.sha256, jobId, 'model');
+  }
+}
+
+// "00:01:02,345" shifted by `by` seconds
+function shiftSrt(text, by) {
+  if (!by) return text;
+  const toMs = (h, m, s, ms) => ((+h * 60 + +m) * 60 + +s) * 1000 + +ms;
+  const fromMs = v => {
+    const p = (n, w = 2) => String(n).padStart(w, '0');
+    return `${p(Math.floor(v / 3600000))}:${p(Math.floor(v / 60000) % 60)}:${p(Math.floor(v / 1000) % 60)},${p(v % 1000, 3)}`;
+  };
+  return text.replace(/(\d+):(\d\d):(\d\d)[,.](\d{3})/g, (_m, h, mi, s, ms) => fromMs(toMs(h, mi, s, ms) + Math.round(by * 1000)));
+}
+
+ipcMain.handle('asr-run', async (_e, o) => {
+  const dir = o.dir || defaultModelsDir();
+  await asrEnsure(dir, o.jobId);
+  const start = Math.max(0, o.start || 0);
+  const info = await probe(o.file);
+  const end = o.end != null ? o.end : parseFloat(info.format.duration) || 0;
+  const tmpBase = path.join(dir, `tmp-${o.jobId}`);
+  const wav = tmpBase + '.wav';
+  try {
+    // 1. the track as 16 kHz mono WAV, which is what whisper wants
+    const args = ['-hide_banner', '-y', '-nostats', '-progress', 'pipe:1'];
+    if (start > 0) args.push('-ss', start.toFixed(3));
+    args.push('-i', o.file);
+    if (o.end != null) args.push('-t', (end - start).toFixed(3));
+    args.push('-map', `0:${o.index}`, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav);
+    asrProgress(o.jobId, 0, 'audio');
+    await run(FFMPEG, args, { jobId: o.jobId, duration: end - start });
+    // 2. recognition; whisper prints "progress = N%" while it works
+    asrProgress(o.jobId, 0, 'recognize');
+    const threads = String(Math.max(1, Math.min(8, os.cpus().length - 1)));
+    await new Promise((resolve, reject) => {
+      const proc = spawn(whisperExe(dir), ['-m', whisperModel(dir), '-f', wav, '-l', o.lang || 'ru', '-t', threads, '-osrt', '-of', tmpBase, '-pp'],
+        { windowsHide: true, cwd: path.dirname(whisperExe(dir)) });
+      jobs.set(o.jobId, proc);
+      let err = '';
+      const onText = d => {
+        const s = d.toString();
+        err = (err + s).slice(-4000);
+        const m = /progress\s*=\s*(\d+)%/g;
+        let p;
+        let last = null;
+        while ((p = m.exec(s))) last = Number(p[1]);
+        if (last != null) asrProgress(o.jobId, last / 100, 'recognize');
+      };
+      proc.stdout.on('data', onText);
+      proc.stderr.on('data', onText);
+      proc.on('error', reject);
+      proc.on('close', code => {
+        jobs.delete(o.jobId);
+        if (proc.cancelled) reject(new Error('Отменено'));
+        else if (code === 0) resolve();
+        else reject(new Error(err.trim().split(/\r?\n/).slice(-2).join(' ') || `распознаватель завершился с кодом ${code}`));
+      });
+    });
+    // 3. the SRT next to the video, with times back on the whole file's clock
+    const srt = shiftSrt(fs.readFileSync(tmpBase + '.srt', 'utf8'), start);
+    const { dir: vdir, name } = path.parse(o.file);
+    const out = freePath(path.join(vdir, `${name}${o.end != null ? ' (фрагмент)' : ''}.${o.lang && o.lang !== 'auto' ? o.lang + '.' : ''}srt`));
+    fs.writeFileSync(out, srt, 'utf8');
+    return { out, lines: (srt.match(/-->/g) || []).length };
+  } finally {
+    for (const ext of ['.wav', '.srt']) fs.rmSync(tmpBase + ext, { force: true });
+  }
 });
 
 // ---------- removing an audio or subtitle track from a file

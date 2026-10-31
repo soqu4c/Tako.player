@@ -749,6 +749,14 @@ body.audio-only #strip-wave { height: 100%; border-radius: 10px; background: non
 .tray-item .i { width: 18px; height: 18px; color: var(--accent); flex: none; }
 .tray-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
 
+/* ---------- speech recognition */
+
+.asr-model { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, .04); color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.asr-model div { min-width: 0; overflow-wrap: anywhere; }
+#asr-progress { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+#asr-status { color: var(--muted); }
+.asr-dir-btns { display: flex; gap: 6px; flex: none; }
+
 /* ---------- markers */
 
 #markers { position: absolute; inset: 0; pointer-events: none; }

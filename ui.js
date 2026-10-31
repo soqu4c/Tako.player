@@ -1560,6 +1560,32 @@ loadIndex = (...args) => {
   return loadIndexBeforeZoom(...args);
 };
 
+// ---------- small always-on-top window (picture-in-picture)
+
+async function togglePip() {
+  if (document.pictureInPictureElement) {
+    document.exitPictureInPicture().catch(() => {});
+    return;
+  }
+  if (!state.info || !state.videoStream || !document.pictureInPictureEnabled) return;
+  if (draw.on) closeDraw();
+  try {
+    await video.requestPictureInPicture();
+  } catch (e) {
+    toast('Не удалось открыть маленькое окно: ' + cleanErr(e));
+  }
+}
+
+video.addEventListener('enterpictureinpicture', () => {
+  document.body.classList.add('pip');
+  api.winMinimize();
+});
+video.addEventListener('leavepictureinpicture', () => {
+  document.body.classList.remove('pip');
+  api.winRestore();
+});
+$('#btn-pip').onclick = togglePip;
+
 // ---------- Discord status
 
 const DISCORD_ICON = 'https://raw.githubusercontent.com/soqu4c/Tako.player/main/assets/icon.png';

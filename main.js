@@ -101,6 +101,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: false,
+      // Keeps timers at full speed while minimized (picture-in-picture): a separately
+      // streamed audio track is kept in sync by them
+      backgroundThrottling: false,
     },
   });
   win.removeMenu();
@@ -444,6 +447,14 @@ async function libraryThumb(file) {
 // ---------- IPC
 
 ipcMain.handle('app-info', () => ({ version: app.getVersion() }));
+
+// The main window steps aside while the video plays in the small always-on-top window
+ipcMain.on('win-minimize', () => { if (win) win.minimize(); });
+ipcMain.on('win-restore', () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+});
 
 // Audio track names from the current OBS profile (Settings → Output → Audio), and which of
 // the six tracks recordings include. null when OBS is not installed.

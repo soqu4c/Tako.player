@@ -1518,6 +1518,7 @@ document.addEventListener('keydown', e => {
     },
     KeyH: toggleCollapse,
     KeyZ: resetZoom,
+    KeyW: togglePip,
     KeyC: screenshot,
     KeyT: toggleTrim,
     KeyD: toggleDraw,

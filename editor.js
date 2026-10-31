@@ -303,6 +303,19 @@ function renderHeads() {
     name.textContent = tr.id;
     name.style.background = trackColor(tr.id);
     h.append(name);
+    // what is on the track: the sound track's name from the file, the player or OBS
+    if (tr.kind === 'audio') {
+      const first = ed.p.clips.filter(c => c.track === tr.id).sort((a, b) => Math.abs(a.start - ed.t) - Math.abs(b.start - ed.t))[0];
+      const label = first ? clipSoundName(first) : '';
+      name.title = label ? `${tr.id} — ${label}` : tr.id;
+      if (label) {
+        const l = document.createElement('span');
+        l.className = 'ed-trlabel';
+        l.textContent = label;
+        l.title = label;
+        h.append(l);
+      }
+    }
     if (tr.kind === 'audio') {
       toggle('m', st.muted, 'Без звука (Mute)', 'M', () => { st.muted = !st.muted; });
       toggle('s', st.solo, 'Только эта дорожка (Solo)', 'S', () => { st.solo = !st.solo; });
@@ -557,7 +570,7 @@ function clipEl(c, tr) {
   el.style.left = xOf(c.start) + 'px';
   el.style.width = Math.max(4, xOf(clipDur(c))) + 'px';
   const m = edMedia(c.media);
-  const label = tr.kind === 'text' ? c.text.split('\n')[0] || 'Текст' : (m ? m.name : '?');
+  const label = tr.kind === 'text' ? c.text.split('\n')[0] || 'Текст' : !m ? '?' : tr.kind === 'audio' && clipSoundName(c) ? `${clipSoundName(c)} · ${m.name}` : m.name;
   el.innerHTML = '<span class="ed-name"></span><i class="ed-edge l"></i><i class="ed-edge r"></i>'
     + '<i class="ed-fh l" title="Тяните вправо — плавное появление"></i><i class="ed-fh r" title="Тяните влево — плавное затухание"></i>';
   el.querySelector('.ed-name').textContent = label + (c.volume !== 1 && tr.kind === 'audio' ? `  ${Math.round(c.volume * 100)}%` : '');
@@ -1209,6 +1222,47 @@ const parseRot = s => {
   return parseFloat(String(s).replace('−', '-').replace(',', '.'));
 };
 
+// Fonts for titles: [name, CSS family, regular file, bold file] from Windows\Fonts
+const FONTS = [
+  ['Arial', 'Arial', 'arial.ttf', 'arialbd.ttf'],
+  ['Arial Black', '"Arial Black"', 'ariblk.ttf', ''],
+  ['Impact', 'Impact', 'impact.ttf', ''],
+  ['Segoe UI', '"Segoe UI"', 'segoeui.ttf', 'segoeuib.ttf'],
+  ['Segoe UI Black', '"Segoe UI Black"', 'seguibl.ttf', ''],
+  ['Bahnschrift', 'Bahnschrift', 'bahnschrift.ttf', ''],
+  ['Calibri', 'Calibri', 'calibri.ttf', 'calibrib.ttf'],
+  ['Verdana', 'Verdana', 'verdana.ttf', 'verdanab.ttf'],
+  ['Tahoma', 'Tahoma', 'tahoma.ttf', 'tahomabd.ttf'],
+  ['Trebuchet MS', '"Trebuchet MS"', 'trebuc.ttf', 'trebucbd.ttf'],
+  ['Georgia', 'Georgia', 'georgia.ttf', 'georgiab.ttf'],
+  ['Times New Roman', '"Times New Roman"', 'times.ttf', 'timesbd.ttf'],
+  ['Comic Sans MS', '"Comic Sans MS"', 'comic.ttf', 'comicbd.ttf'],
+  ['Consolas', 'Consolas', 'consola.ttf', 'consolab.ttf'],
+  ['Courier New', '"Courier New"', 'cour.ttf', 'courbd.ttf'],
+  ['Segoe Print', '"Segoe Print"', 'segoepr.ttf', 'segoeprb.ttf'],
+  ['Gabriola', 'Gabriola', 'Gabriola.ttf', ''],
+];
+const fontOf = c => FONTS.find(f => f[0] === c.font) || FONTS[0];
+
+// Name of sound track k of a file, the same as the player shows: the name given in the
+// player for this file, the file's own title, the name set for all files, else OBS's
+function soundName(m, k) {
+  const a = m && m.audio[k];
+  if (!a) return '';
+  const saved = (recall('trackNames', {})[m.path] || {})[a.index];
+  if (saved) return saved;
+  if (a.name && !STOCK_HANDLER.test(a.name.trim())) return a.name.trim();
+  const own = recall('defaultNames', {})[k];
+  if (own) return own;
+  if (obsTracks && settings.obsNames) {
+    const enabled = [1, 2, 3, 4, 5, 6].filter(n => obsTracks.recTracks & (1 << (n - 1)));
+    const n = enabled.length === m.audio.length ? enabled[k] : k + 1;
+    if (obsTracks.names[n - 1]) return obsTracks.names[n - 1];
+  }
+  return '';
+}
+const clipSoundName = c => soundName(edMedia(c.media), c.audioK || 0);
+
 function renderInspector() {
   placeXform();
   const body = $('#ed-insp-body');
@@ -1393,6 +1447,23 @@ function renderInspector() {
         { get: x => titleXY(x)[0] * ed.p.w, set: (x, n) => { const [, cy] = titleXY(x); x.x = n / ed.p.w; x.y = cy; } },
         { get: x => titleXY(x)[1] * ed.p.h, set: (x, n) => { const [cx] = titleXY(x); x.y = n / ed.p.h; x.x = cx; } },
       ]);
+      const fr = document.createElement('label');
+      fr.className = 'fx-row';
+      fr.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Шрифт</span>';
+      const fs = document.createElement('select');
+      for (const [name, css] of FONTS) { const o = new Option(name, name); o.style.fontFamily = css; fs.add(o); }
+      fs.value = c.font || 'Arial';
+      fs.style.fontFamily = fontOf(c)[1];
+      fs.onchange = () => { edCommit(); for (const x of sel) x.font = fs.value; edChanged(); };
+      fr.append(fs);
+      rows.append(fr);
+      const br = document.createElement('label');
+      br.className = 'fx-row fx-check';
+      br.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Жирный</span><input type="checkbox">';
+      br.querySelector('input').checked = !!c.bold;
+      br.querySelector('input').disabled = !fontOf(c)[3];
+      br.querySelector('input').onchange = ev => { edCommit(); for (const x of sel) x.bold = ev.target.checked; edChanged(); };
+      rows.append(br);
       row(rows, 'Размер', [{ get: x => x.size, set: (x, n) => { x.size = n; }, min: 8, max: 400, unit: 'px' }]);
       row(rows, 'Появление', [{ get: x => x.fadeIn || 0, set: (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с' }]);
       row(rows, 'Исчезание', [{ get: x => x.fadeOut || 0, set: (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с' }]);
@@ -1445,7 +1516,7 @@ function renderInspector() {
           r.className = 'fx-row';
           r.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Дорожка файла</span>';
           const s = document.createElement('select');
-          am.audio.forEach((t, k) => s.add(new Option(`${k + 1}${t.name ? ' — ' + t.name : ''}`, k)));
+          am.audio.forEach((t, k) => s.add(new Option(`${k + 1}${soundName(am, k) ? ' — ' + soundName(am, k) : ''}`, k)));
           s.value = a.audioK || 0;
           s.onchange = () => { edCommit(); a.audioK = Number(s.value); edChanged(); };
           r.append(s);
@@ -1633,6 +1704,8 @@ function syncPreview(force) {
       // sizes are given for a 1080 px high frame
       d.style.fontSize = `calc(${c.size / 1080} * var(--ed-h))`;
       d.style.color = c.color;
+      d.style.fontFamily = fontOf(c)[1];
+      d.style.fontWeight = c.bold && fontOf(c)[3] ? '700' : '400';
       d.style.opacity = fadeAt(c, t);
       titles.append(d);
     }
@@ -1973,7 +2046,7 @@ function exportSpec() {
   if (!ed.p.tracks.T1.hidden) {
     for (const c of ed.p.clips.filter(x => x.track === 'T1' && !x.off && x.text.trim())) {
       const [x, y] = titleXY(c);
-      spec.texts.push({ text: c.text, start: c.start, dur: clipDur(c), size: c.size, color: c.color, x, y, box: c.box, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
+      spec.texts.push({ text: c.text, start: c.start, dur: clipDur(c), size: c.size, color: c.color, x, y, box: c.box, fontFile: (c.bold && fontOf(c)[3]) || fontOf(c)[2], fadeIn: c.fadeIn, fadeOut: c.fadeOut });
     }
   }
   return spec;

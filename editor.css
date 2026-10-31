@@ -549,3 +549,5 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 #btn-mixlisten.on { color: rgb(var(--accent-rgb)); }
 #mixlisten-n { position: absolute; top: -4px; right: -6px; font-size: 9px; font-weight: 700; padding: 1px 3px; border-radius: 5px; background: var(--grad); color: #fff; }
 #ed-zoom-badge { position: absolute; right: 10px; top: 10px; z-index: 6; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font: 600 11.5px Consolas, monospace; }
+.ed-trlabel { font-size: 10.5px; color: var(--soft); max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+.ed { --head-w: 290px; }

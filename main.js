@@ -1260,7 +1260,10 @@ ipcMain.handle('editor-export', async (_e, o) => {
     const y = `h*${num(t.y)}-text_h/2`;
     const fi = Math.max(0.001, t.fadeIn || 0), fo = Math.max(0.001, t.fadeOut || 0);
     const alpha = `if(lt(t,${num(s + fi)}),(t-${num(s)})/${num(fi)},if(gt(t,${num(e - fo)}),(${num(e)}-t)/${num(fo)},1))`;
-    let f = `[${base}]drawtext=fontfile='${FONT}':textfile='${ffPath(file)}':fontsize=${size}:fontcolor=${t.color}:x=${x}:y=${y}:line_spacing=${Math.round(size * 0.2)}:enable='between(t,${num(s)},${num(e)})':alpha='${alpha}'`;
+    // the title's font from Windows\Fonts, Arial when it is missing
+    const fontPath = path.join(process.env.SystemRoot || 'C:\\Windows', 'Fonts', t.fontFile || '');
+    const ff = /^[\w.-]+\.ttf$/i.test(t.fontFile || '') && fs.existsSync(fontPath) ? ffPath(fontPath) : FONT;
+    let f = `[${base}]drawtext=fontfile='${ff}':textfile='${ffPath(file)}':fontsize=${size}:fontcolor=${t.color}:x=${x}:y=${y}:line_spacing=${Math.round(size * 0.2)}:enable='between(t,${num(s)},${num(e)})':alpha='${alpha}'`;
     if (t.box) f += `:box=1:boxcolor=black@0.55:boxborderw=${Math.round(size * 0.35)}`;
     graph.push(`${f}[txt${k}]`);
     base = `txt${k}`;

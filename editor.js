@@ -5,7 +5,9 @@
 // ---------- project model
 //
 // media:  files added to the project, with what ffprobe told about them
-// clips:  { id, track, media, start, in, out, volume, fadeIn, fadeOut, link, audioK }
+// clips:  { id, track, media, start, in, out, volume, fadeIn, fadeOut, link, audioK, speed, trans }
+//         speed: 2 plays twice as fast (the clip is half as long on the timeline)
+//         trans: { kind: 'cross' | 'black', dur } — a transition from the clip just before it
 //         text clips: { id, track: 'T1', start, in: 0, out: duration, text, size, color, pos, box, fadeIn, fadeOut }
 // A video file dropped on the timeline gives a video clip and each of its sound tracks as
 // linked audio clips; linked clips move, trim and split together.
@@ -70,8 +72,59 @@ for (const c of ed.p.clips) ed.nextId = Math.max(ed.nextId, c.id + 1);
 setAudioCount(ed.p, ed.p.aCount || 3);
 
 const edMedia = file => ed.p.media.find(m => m.path === file);
-const clipDur = c => c.out - c.in;
+const sp = c => c.speed || 1;
+// length on the timeline; the part of the file it plays is (out - in), sped up or slowed down
+const clipDur = c => (c.out - c.in) / sp(c);
 const clipEnd = c => c.start + clipDur(c);
+// the time in the file that plays at timeline time t
+const srcAt = (c, t) => c.in + (t - c.start) * sp(c);
+
+// ---------- transitions
+//
+// A transition sits on the second clip of a cut on one track. Cross dissolve: the first clip
+// goes on under the second for the transition's length (its last frame stays if the file
+// ends) while the second one shows through; its sound fades out under the new one.
+// Dip to black: the first clip fades out, the second fades in, half the length each.
+const TRANS = [['cross', 'Наплыв'], ['black', 'Затемнение']];
+const atCut = (a, b) => a !== b && a.track === b.track && !a.off && !b.off && Math.abs(clipEnd(a) - b.start) < 0.02;
+const prevAtCut = c => ed.p.clips.find(x => atCut(x, c));
+const nextAtCut = c => ed.p.clips.find(x => atCut(c, x));
+function transOf(c) {
+  if (!c || !c.trans || c.off) return null;
+  const prev = prevAtCut(c);
+  if (!prev) return null;
+  return { kind: c.trans.kind, dur: Math.min(c.trans.dur, clipDur(c), clipDur(prev)), prev };
+}
+// how long a clip goes on past its end, under a cross dissolve into the next one
+const tailOf = c => {
+  const tr = transOf(nextAtCut(c));
+  return tr && tr.kind === 'cross' ? tr.dur : 0;
+};
+const fadeInOf = c => {
+  const tr = transOf(c);
+  return Math.max(c.fadeIn || 0, tr ? (tr.kind === 'cross' ? tr.dur : tr.dur / 2) : 0);
+};
+// The speed of clips with what is linked to them. What came right after each one on its track
+// moves along, so the clip neither covers the next one nor leaves a gap.
+function setSpeed(clips, speed) {
+  const group = [...new Set(clips.flatMap(linked))].filter(x => x.track !== 'T1' && !(edMedia(x.media) || {}).image);
+  for (const x of group) {
+    const oldEnd = clipEnd(x);
+    x.speed = speed;
+    const d = clipEnd(x) - oldEnd;
+    for (const y of ed.p.clips) if (y.track === x.track && !group.includes(y) && y.start >= oldEnd - 0.02) y.start = Math.max(0, y.start + d);
+    x.fadeIn = Math.min(x.fadeIn || 0, clipDur(x) / 2);
+    x.fadeOut = Math.min(x.fadeOut || 0, clipDur(x) / 2);
+  }
+}
+// A transition at the start of these clips (and the ones linked to them); null takes it off
+function setTrans(clips, trans) {
+  for (const x of new Set(clips.flatMap(linked))) x.trans = trans && prevAtCut(x) ? { ...trans } : null;
+}
+const fadeOutOf = c => {
+  const tr = transOf(nextAtCut(c));
+  return Math.max(c.fadeOut || 0, tr && tr.kind === 'black' ? tr.dur / 2 : 0);
+};
 const edDuration = () => ed.p.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0);
 const linked = c => (c.link ? ed.p.clips.filter(x => x.link === c.link) : [c]);
 const fmtEd = t => {
@@ -258,12 +311,12 @@ function resolveOverlaps(moved) {
       if (e <= a + 1e-6 || s >= b - 1e-6) continue;
       if (s >= a && e <= b) ed.p.clips = ed.p.clips.filter(x => x !== c);
       else if (s < a && e > b) {
-        const tail = { ...c, id: ed.nextId++, start: b, in: c.in + (b - s) };
-        c.out = c.in + (a - s);
+        const tail = { ...c, id: ed.nextId++, start: b, in: c.in + (b - s) * sp(c) };
+        c.out = c.in + (a - s) * sp(c);
         ed.p.clips.push(tail);
-      } else if (s < a) c.out = c.in + (a - s);
+      } else if (s < a) c.out = c.in + (a - s) * sp(c);
       else {
-        c.in += b - s;
+        c.in += (b - s) * sp(c);
         c.start = b;
       }
     }
@@ -572,7 +625,14 @@ function clipEl(c, tr) {
   const label = tr.kind === 'text' ? c.text.split('\n')[0] || 'Текст' : !m ? '?' : tr.kind === 'audio' && clipSoundName(c) ? `${clipSoundName(c)} · ${m.name}` : m.name;
   el.innerHTML = '<span class="ed-name"></span><i class="ed-edge l"></i><i class="ed-edge r"></i>'
     + '<i class="ed-fh l" title="Тяните вправо — плавное появление"></i><i class="ed-fh r" title="Тяните влево — плавное затухание"></i>';
-  el.querySelector('.ed-name').textContent = label + (c.volume !== 1 && tr.kind === 'audio' ? `  ${Math.round(c.volume * 100)}%` : '');
+  el.querySelector('.ed-name').textContent = label + (c.volume !== 1 && tr.kind === 'audio' ? `  ${Math.round(c.volume * 100)}%` : '')
+    + (sp(c) !== 1 ? `  · скорость ${Math.round(sp(c) * 100)}%` : '');
+  // the transition from the clip before, as a striped block at the start
+  const trn = transOf(c);
+  if (trn) {
+    const name = TRANS.find(k => k[0] === trn.kind)[1];
+    el.insertAdjacentHTML('beforeend', `<i class="ed-trans ${trn.kind}" style="width: ${Math.max(6, xOf(trn.kind === 'cross' ? trn.dur : trn.dur / 2))}px" title="${name}, ${trn.dur.toFixed(1)} с"></i>`);
+  }
   const fi = xOf(c.fadeIn || 0), fo = xOf(c.fadeOut || 0);
   el.querySelector('.ed-fh.l').style.left = fi + 'px';
   el.querySelector('.ed-fh.r').style.right = fo + 'px';
@@ -678,8 +738,8 @@ function drawClipWave(cv, c, el) {
   if (peaks.max == null) peaks.max = peaks.reduce((p, v) => Math.max(p, v), 0);
   const gain = Math.min(8, 0.95 / Math.max(0.01, peaks.max));
   for (let x = 0; x < width; x++) {
-    const t0 = c.in + tOf(x0 + x);
-    const t1 = c.in + tOf(x0 + x + 1);
+    const t0 = c.in + tOf(x0 + x) * sp(c);
+    const t1 = c.in + tOf(x0 + x + 1) * sp(c);
     let v = 0;
     for (let i = Math.floor(t0 * per), e = Math.max(i + 1, Math.ceil(t1 * per)); i < e && i < peaks.length; i++) v = Math.max(v, peaks[i]);
     const bar = Math.max(1, Math.min(1, v * gain) * h);
@@ -719,7 +779,7 @@ function filmStrip(c, m) {
   const step = tOf(THUMB_W);
   for (let k = Math.floor(part[0] / THUMB_W); k * THUMB_W < part[1]; k++) {
     // times on a grid, so the same frames are reused while scrolling
-    const time = m.image ? 0 : Math.min(m.dur - 0.05, Math.round((c.in + k * step) * 10) / 10);
+    const time = m.image ? 0 : Math.min(m.dur - 0.05, Math.round((c.in + k * step * sp(c)) * 10) / 10);
     const key = `${m.path}|${time}`;
     const img = document.createElement('img');
     img.className = 'ed-thumb';
@@ -969,14 +1029,14 @@ function dragClips(e, c, edge) {
         const maxOut = x.track === 'T1' || (m && m.image) ? Infinity : m ? m.dur : o.out;
         if (edge === 'l') {
           let s = snap(o.start + dt, pts);
-          let d = clamp(s.t - o.start, -o.in, clipDur(o) - 0.05);
+          let d = clamp(s.t - o.start, -o.in / sp(o), clipDur(o) - 0.05);
           d = Math.max(d, -o.start);
           x.start = o.start + d;
-          x.in = o.in + d;
+          x.in = o.in + d * sp(o);
           hit = s.hit;
         } else {
           let s = snap(clipEnd(o) + dt, pts);
-          x.out = clamp(o.out + (s.t - clipEnd(o)), o.in + 0.05, maxOut);
+          x.out = clamp(o.out + (s.t - clipEnd(o)) * sp(o), o.in + 0.05, maxOut);
           hit = s.hit;
         }
       }
@@ -1016,12 +1076,12 @@ function splitClips(list, t) {
   edCommit();
   const newLink = new Map();
   for (const c of cut) {
-    const tail = { ...c, id: ed.nextId++, start: t, in: c.in + (t - c.start), fadeIn: 0 };
+    const tail = { ...c, id: ed.nextId++, start: t, in: srcAt(c, t), fadeIn: 0, trans: null };
     if (c.link) {
       if (!newLink.has(c.link)) newLink.set(c.link, ed.nextId++);
       tail.link = newLink.get(c.link);
     }
-    c.out = c.in + (t - c.start);
+    c.out = srcAt(c, t);
     c.fadeOut = 0;
     ed.p.clips.push(tail);
   }
@@ -1092,6 +1152,14 @@ function clipMenu(e, c) {
     const id = ed.nextId++;
     items.push({ icon: 'i-link', label: 'Связать выбранное', run: change(x => { x.link = id; }) });
   }
+  // transitions from the clip just before, on the same track
+  if (prevAtCut(c)) {
+    const put = trans => () => { edCommit(); setTrans(sel, trans); edChanged(); };
+    items.push('-');
+    for (const [k, name] of TRANS) items.push({ icon: 'i-film', label: `${name} с предыдущим клипом (1 с)`, run: put({ kind: k, dur: 1 }) });
+    if (c.trans) items.push({ icon: 'i-x', label: 'Убрать переход', run: put(null) });
+  }
+  if (sp(c) !== 1) items.push({ icon: 'i-film', label: 'Обычная скорость (100%)', run: () => { edCommit(); setSpeed(sel, 1); edChanged(); } });
   items.push('-',
     { icon: 'i-scissors', label: 'Разрезать по линии времени', run: () => splitClips(sel, ed.t) },
     { icon: 'i-file-plus', label: 'Копировать (Ctrl+C)', run: copySelected },
@@ -1459,8 +1527,43 @@ function renderInspector() {
     section('fade', 'Появление и исчезание', rows => {
       row(rows, 'Появление', [{ get: x => x.fadeIn || 0, set: (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: p }]);
       row(rows, 'Исчезание', [{ get: x => x.fadeOut || 0, set: (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: p }]);
-      if (m && m.image) row(rows, 'Длительность', [{ get: x => clipDur(x), set: (x, n) => { x.out = x.in + n; }, min: 0.2, step: 0.1, unit: 'с', list: [v] }]);
+      if (m && m.image) row(rows, 'Длительность', [{ get: x => clipDur(x), set: (x, n) => { x.out = x.in + n * sp(x); }, min: 0.2, step: 0.1, unit: 'с', list: [v] }]);
     }, () => p.forEach(x => { x.fadeIn = x.fadeOut = 0; }));
+  }
+
+  const timed = sel.filter(x => x.track !== 'T1' && !(edMedia(x.media) || {}).image);
+  if (timed.length) {
+    const t0 = timed[0];
+    section('time', 'Скорость и переход', rows => {
+      row(rows, 'Скорость', [{ get: () => sp(t0) * 100, set: (x, n) => setSpeed(timed, n / 100), min: 10, max: 1000, step: 5, unit: '%', list: [t0] }]);
+      const presets = document.createElement('div');
+      presets.className = 'fx-fits';
+      for (const v of [25, 50, 100, 200, 400]) {
+        const b = document.createElement('button');
+        b.className = 'btn small ghost';
+        b.classList.toggle('on', Math.abs(sp(t0) * 100 - v) < 0.5);
+        b.textContent = v + '%';
+        b.onclick = () => { edCommit(); setSpeed(timed, v / 100); edChanged(); };
+        presets.append(b);
+      }
+      rows.append(presets);
+      // a transition needs a clip right before this one on its track
+      const prev = prevAtCut(t0);
+      const r = document.createElement('label');
+      r.className = 'fx-row';
+      r.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Переход в начале</span>';
+      const s = document.createElement('select');
+      s.add(new Option(prev ? 'Нет' : 'Нет (впритык нет клипа)', ''));
+      for (const [k, name] of TRANS) s.add(new Option(name, k));
+      s.value = (t0.trans && t0.trans.kind) || '';
+      s.disabled = !prev;
+      s.onchange = () => { edCommit(); setTrans(timed, s.value ? { kind: s.value, dur: (t0.trans && t0.trans.dur) || 1 } : null); edChanged(); };
+      r.append(s);
+      rows.append(r);
+      if (t0.trans && prev) {
+        row(rows, 'Длительность', [{ get: () => (t0.trans ? t0.trans.dur : 1), set: (x, n) => setTrans(timed, { kind: t0.trans.kind, dur: n }), min: 0.1, max: 10, step: 0.1, unit: 'с', list: [t0] }]);
+      }
+    }, () => { setSpeed(timed, 1); setTrans(timed, null); });
   }
 
   if (kind === 'text') {
@@ -1564,16 +1667,31 @@ function renderInspector() {
 // are nudged back when they drift.
 
 const edV = { V1: $('#ed-v1'), V2: $('#ed-v2') };
+// under each track's picture, the clip that goes on under a cross dissolve
+const edTail = {};
+for (const [track, el] of Object.entries(edV)) {
+  edTail[track] = el.cloneNode();
+  edTail[track].removeAttribute('id');
+  edTail[track].className = 'ed-tail ' + track;
+  el.before(edTail[track]);
+}
 const edAudio = new Map(); // clip id -> <audio>
 let clock = null; // { t0, n0 }
 
-function fadeAt(c, t) {
+// Fades, with those a transition adds. Under a cross dissolve the picture stays whole (the
+// next clip shows through over it) and the sound fades out.
+function fadeAt(c, t, sound = false) {
   const local = t - c.start;
+  const tail = tailOf(c);
+  const dur = clipDur(c) + tail;
+  const fi = fadeInOf(c), fo = Math.max(fadeOutOf(c), sound ? tail : 0);
   let a = 1;
-  if (c.fadeIn > 0 && local < c.fadeIn) a = Math.min(a, local / c.fadeIn);
-  if (c.fadeOut > 0 && clipDur(c) - local < c.fadeOut) a = Math.min(a, (clipDur(c) - local) / c.fadeOut);
+  if (fi > 0 && local < fi) a = Math.min(a, local / fi);
+  if (fo > 0 && dur - local < fo) a = Math.min(a, (dur - local) / fo);
   return clamp(a, 0, 1);
 }
+// the clip of a track that plays at t, counting the part under a cross dissolve
+const tailAt = (track, t) => ed.p.clips.find(c => !c.off && c.track === track && clipEnd(c) <= t && t < clipEnd(c) + tailOf(c));
 // Transform of a picture clip, as in After Effects' Layer Transform. The anchor point is in
 // the picture's own pixels (its middle by default); the position says where in the frame
 // the anchor lands; scale and rotation turn around the anchor.
@@ -1654,44 +1772,50 @@ function syncEl(el, file, local, force) {
 }
 
 // Something on screen or in the speakers is still seeking or loading
-const edWaiting = () => [...Object.values(edV), ...edAudio.values()]
+const edWaiting = () => [...Object.values(edV), ...Object.values(edTail), ...edAudio.values()]
   .some(el => el.dataset.src && !el.hidden && el.src && (el.seeking || el.readyState < 3));
+
+// One picture layer of the monitor: a video element, or a picture for an image clip
+function showLayer(track, el, c, t, force, key) {
+  const screen = $('#ed-screen');
+  const m = c && edMedia(c.media);
+  let img = screen.querySelector(`img[data-layer="${key}"]`);
+  if (!c || !m || !m.image) img?.remove();
+  if (!c || !m) {
+    el.hidden = true;
+    if (!el.paused) el.pause();
+    return;
+  }
+  if (m.image) {
+    el.hidden = true;
+    if (!img) {
+      img = document.createElement('img');
+      img.dataset.layer = key;
+      img.className = (key.endsWith('-tail') ? 'ed-tail ' : 'ed-layer ') + track;
+      el.after(img);
+    }
+    if (img.dataset.src !== m.path) { img.dataset.src = m.path; img.src = api.toUrl(m.path); }
+    img.style.opacity = fadeAt(c, t) * motionCss(c, img);
+    return;
+  }
+  el.hidden = false;
+  el.style.opacity = fadeAt(c, t) * motionCss(c, el);
+  if (el.playbackRate !== sp(c)) el.playbackRate = sp(c);
+  syncEl(el, m.path, srcAt(c, t), force && !ed.playing);
+}
 
 function syncPreview(force) {
   const t = ed.t;
-  const screen = $('#ed-screen');
   for (const [track, el] of Object.entries(edV)) {
-    const c = !ed.p.tracks[track].hidden && clipAt(track, t);
-    const m = c && edMedia(c.media);
-    if (!c || !m) {
-      el.hidden = true;
-      if (!el.paused) el.pause();
-      screen.querySelector(`img[data-track="${track}"]`)?.remove();
-      continue;
-    }
-    if (m.image) {
-      el.hidden = true;
-      let img = screen.querySelector(`img[data-track="${track}"]`);
-      if (!img) {
-        img = document.createElement('img');
-        img.dataset.track = track;
-        img.className = 'ed-layer ' + track;
-        screen.insertBefore(img, $('#ed-titles'));
-      }
-      if (img.dataset.src !== m.path) { img.dataset.src = m.path; img.src = api.toUrl(m.path); }
-      img.style.opacity = fadeAt(c, t) * motionCss(c, img);
-      continue;
-    }
-    screen.querySelector(`img[data-track="${track}"]`)?.remove();
-    el.hidden = false;
-    el.style.opacity = fadeAt(c, t) * motionCss(c, el);
-    syncEl(el, m.path, c.in + (t - c.start), force && !ed.playing);
+    const shown = !ed.p.tracks[track].hidden;
+    showLayer(track, el, shown && clipAt(track, t), t, force, track);
+    showLayer(track, edTail[track], shown && tailAt(track, t), t, force, track + '-tail');
   }
   // sound
   const live = new Set();
   for (const c of ed.p.clips) {
     const tr = trackOf(c.track);
-    if (tr.kind !== 'audio' || c.off || c.start > t || clipEnd(c) <= t) continue;
+    if (tr.kind !== 'audio' || c.off || c.start > t || clipEnd(c) + tailOf(c) <= t) continue;
     const st = ed.p.tracks[c.track];
     live.add(c.id);
     let el = edAudio.get(c.id);
@@ -1706,9 +1830,10 @@ function syncPreview(force) {
     if (el.audioTracks && el.audioTracks.length > 1) {
       for (let k = 0; k < el.audioTracks.length; k++) el.audioTracks[k].enabled = k === (c.audioK || 0);
     } else if (!el.audioTracks) el.addEventListener('loadedmetadata', () => syncPreview(), { once: true });
-    el.volume = clamp(c.volume * st.volume * fadeAt(c, t), 0, 1);
+    el.volume = clamp(c.volume * st.volume * fadeAt(c, t, true), 0, 1);
     el.muted = trackSilent(c.track);
-    syncEl(el, m.path, c.in + (t - c.start), force && !ed.playing);
+    if (el.playbackRate !== sp(c)) el.playbackRate = sp(c);
+    syncEl(el, m.path, srcAt(c, t), force && !ed.playing);
   }
   for (const [id, el] of edAudio) {
     if (live.has(id)) continue;
@@ -1868,7 +1993,7 @@ function edPlay() {
 function edPause() {
   ed.playing = false;
   $('#ed-play-icon').setAttribute('href', '#i-play');
-  for (const el of [...Object.values(edV), ...edAudio.values()]) el.pause();
+  for (const el of [...Object.values(edV), ...Object.values(edTail), ...edAudio.values()]) el.pause();
   syncPreview(true);
 }
 const edToggle = () => (ed.playing ? edPause() : edPlay());
@@ -2061,7 +2186,8 @@ function exportSpec() {
       const m = edMedia(c.media);
       if (!m || !m.video) continue;
       const pl = placement(c);
-      spec.video.push({ file: m.path, vIndex: m.video.index, image: m.image, in: c.in, dur: clipDur(c), start: c.start, fadeIn: c.fadeIn, fadeOut: c.fadeOut,
+      // dur counts the part under a cross dissolve into the next clip
+      spec.video.push({ file: m.path, vIndex: m.video.index, image: m.image, in: c.in, dur: clipDur(c) + tailOf(c), speed: sp(c), start: c.start, fadeIn: fadeInOf(c), fadeOut: fadeOutOf(c),
         x: pl.cx, y: pl.cy, pw: pl.w, ph: pl.h, rot: pl.rot, opacity: pl.opacity });
     }
   }
@@ -2072,7 +2198,8 @@ function exportSpec() {
     if (!m || !m.audio.length) continue;
     const vol = c.volume * st.volume;
     if (vol <= 0) continue;
-    spec.audio.push({ file: m.path, aIndex: m.audio[c.audioK || 0].index, in: c.in, dur: clipDur(c), start: c.start, volume: vol, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
+    const tail = tailOf(c);
+    spec.audio.push({ file: m.path, aIndex: m.audio[c.audioK || 0].index, in: c.in, dur: clipDur(c) + tail, speed: sp(c), start: c.start, volume: vol, fadeIn: fadeInOf(c), fadeOut: Math.max(fadeOutOf(c), tail) });
   }
   if (!ed.p.tracks.T1.hidden) {
     for (const c of ed.p.clips.filter(x => x.track === 'T1' && !x.off && x.text.trim())) {

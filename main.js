@@ -1240,6 +1240,13 @@ ipcMain.handle('concat-clips', async (_e, o) => {
 const ffPath = p => p.replace(/\\/g, '/').replace(/:/g, '\\:');
 const FONT = ffPath(path.join(process.env.SystemRoot || 'C:\\Windows', 'Fonts', 'arial.ttf'));
 const num = x => (Math.round(x * 1000) / 1000).toString();
+// atempo takes 0.5…100 at a time, so slower speeds are a chain of halvings
+function atempo(speed) {
+  const parts = [];
+  for (; speed < 0.5; speed /= 0.5) parts.push('atempo=0.5');
+  parts.push(`atempo=${num(speed)}`);
+  return parts.join(',');
+}
 
 ipcMain.handle('editor-export', async (_e, o) => {
   const { w, h } = o;
@@ -1259,13 +1266,14 @@ ipcMain.handle('editor-export', async (_e, o) => {
   o.video.forEach((c, k) => {
     // a picture is one frame, repeated for as long as its clip lasts
     if (c.image) args.push('-loop', '1', '-framerate', String(fps), '-t', num(c.dur), '-i', c.file);
-    else args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
+    else args.push('-ss', num(c.in), '-t', num(c.dur * (c.speed || 1)), '-i', c.file);
     // fitted into the frame, then the clip's own scale, rotation and opacity (Effect Controls)
     // the editor works out the picture's size on screen (width and height may differ)
     const even = v => Math.max(2, Math.round(v / 2) * 2);
     const size = c.pw > 0 && c.ph > 0 ? `${even(c.pw)}:${even(c.ph)}` : `${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2`;
     const a = num((c.rot || 0) * Math.PI / 180);
-    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${size},format=yuva420p`;
+    // sped up or slowed down; past the end of the file (under a cross dissolve) the last frame stays
+    let f = `[${input}:${c.vIndex}]setpts=(PTS-STARTPTS)/${num(c.speed || 1)},fps=${fps},tpad=stop_mode=clone:stop_duration=${num(c.dur)},trim=duration=${num(c.dur)},scale=${size},format=yuva420p`;
     if (c.rot) f += `,rotate=${a}:ow=rotw(${a}):oh=roth(${a}):c=none`;
     if (c.opacity != null && c.opacity < 1) f += `,colorchannelmixer=aa=${num(Math.max(0, c.opacity))}`;
     if (c.fadeIn > 0) f += `,fade=t=in:st=0:d=${num(c.fadeIn)}:alpha=1`;
@@ -1298,8 +1306,11 @@ ipcMain.handle('editor-export', async (_e, o) => {
   graph.push(`[${base}]format=yuv420p[vout]`);
   const fmtA = 'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo';
   const mixed = o.audio.map((c, k) => {
-    args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
-    let f = `[${input}:${c.aIndex}]${fmtA},asetpts=PTS-STARTPTS,volume=${num(c.volume)}`;
+    const speed = c.speed || 1;
+    args.push('-ss', num(c.in), '-t', num(c.dur * speed), '-i', c.file);
+    let f = `[${input}:${c.aIndex}]${fmtA},asetpts=PTS-STARTPTS`;
+    if (speed !== 1) f += `,${atempo(speed)}`;
+    f += `,apad,atrim=duration=${num(c.dur)},volume=${num(c.volume)}`;
     if (c.fadeIn > 0) f += `,afade=t=in:st=0:d=${num(c.fadeIn)}`;
     if (c.fadeOut > 0) f += `,afade=t=out:st=${num(Math.max(0, c.dur - c.fadeOut))}:d=${num(c.fadeOut)}`;
     graph.push(`${f},adelay=${Math.round(c.start * 1000)}:all=1[a${k}]`);

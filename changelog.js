@@ -3,6 +3,17 @@
 
 const CHANGELOG = [
   {
+    version: '1.3.2',
+    date: '2026-11-01',
+    sections: [
+      [['Исправления', 'Fixes'], [
+        ['Полоска с кадрами в обрезке: клик ставит просмотр туда, куда нажали, а не прыгает в начало', 'The frame strip in trimming: a click goes where you clicked instead of jumping to the start'],
+        ['Громкость: правый клик по ползунку — 100%, у отметки 100% ползунок прилипает', 'Volume: right click on the slider sets 100%, and the slider sticks at the 100% mark'],
+        ['Громкость дорожек при сохранении: 100% — двойным кликом по числу, частые клики по ползунку его больше не сбрасывают', 'Track volumes when saving: double click the number for 100%; quick clicks on the slider no longer reset it'],
+      ]],
+    ],
+  },
+  {
     version: '1.3.1',
     date: '2026-11-01',
     sections: [

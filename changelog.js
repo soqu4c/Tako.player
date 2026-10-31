@@ -15,7 +15,6 @@ const CHANGELOG = [
       ]],
       [['Плеер', 'Player'], [
         ['Несколько звуковых дорожек одновременно — кнопка «+» у дорожек или Shift+A', 'Several sound tracks at once — the “+” button by the tracks or Shift+A'],
-        ['Двойной клик по громкости — 100%', 'Double click on the volume — 100%'],
       ]],
     ],
   },

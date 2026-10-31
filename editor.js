@@ -342,7 +342,6 @@ function renderHeads() {
         store('edProject', ed.p);
         syncPreview(true);
       };
-      vol.ondblclick = () => pct.ondblclick();
       pct.ondblclick = () => { edCommit(); st.volume = 1; vol.value = 1; paint(); store('edProject', ed.p); syncPreview(true); };
       wrap.append(vol, pct);
       h.append(wrap);
@@ -1121,14 +1120,40 @@ lanesBox.addEventListener('contextmenu', e => {
   if (c && !isLocked(c)) clipMenu(e, c);
 });
 
-// Ruler: click or drag to move the playhead
+// Ruler: click or drag to move the playhead. Held at an edge of the timeline, it scrolls on
+// at a steady pace that grows with how far past the edge the mouse is, never a screen at once.
+const SCRUB_EDGE = 24; // px
+const SCRUB_MAX = 8; // px per frame
 $('#ed-ruler').addEventListener('pointerdown', e => {
   const r = $('#ed-ruler');
   r.setPointerCapture(e.pointerId);
-  const go = ev => seekEd(tOf(canvasX(ev)));
-  go(e);
-  r.onpointermove = go;
-  r.onpointerup = () => { r.onpointermove = null; };
+  let cx = e.clientX;
+  let raf = 0;
+  const go = () => {
+    const v = scroller.getBoundingClientRect();
+    seekEd(tOf(clamp(cx, v.left, v.right - 1) - $('#ed-canvas').getBoundingClientRect().left), true);
+  };
+  const tick = () => {
+    raf = 0;
+    const v = scroller.getBoundingClientRect();
+    const past = cx < v.left + SCRUB_EDGE ? cx - v.left - SCRUB_EDGE : cx > v.right - SCRUB_EDGE ? cx - v.right + SCRUB_EDGE : 0;
+    if (!past) return;
+    scroller.scrollLeft += clamp(past / 4, -SCRUB_MAX, SCRUB_MAX);
+    go();
+    raf = requestAnimationFrame(tick);
+  };
+  const move = ev => {
+    cx = ev.clientX;
+    go();
+    if (!raf) raf = requestAnimationFrame(tick);
+  };
+  move(e);
+  r.onpointermove = move;
+  r.onpointerup = () => {
+    r.onpointermove = null;
+    cancelAnimationFrame(raf);
+    raf = 0;
+  };
 });
 
 // Files dropped from the bin or from Explorer onto a lane
@@ -1791,10 +1816,11 @@ xform.onpointerdown = e => {
   };
 };
 
-function seekEd(t) {
+function seekEd(t, stay = false) {
   ed.t = clamp(t, 0, Math.max(edDuration(), 0));
   if (ed.playing) clock = { t0: ed.t, n0: performance.now() };
   syncPreview(true);
+  if (stay) return;
   // a jump out of sight brings the timeline along
   const x = xOf(ed.t);
   if (x < scroller.scrollLeft || x > scroller.scrollLeft + scroller.clientWidth - 20) scroller.scrollLeft = x - scroller.clientWidth / 3;

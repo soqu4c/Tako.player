@@ -561,13 +561,16 @@ strip.addEventListener('pointerdown', e => {
   if (!state.info || e.button !== 0) return;
   const handle = e.target.closest('.strip-handle');
   const which = handle && handle.dataset.h;
-  const onSel = !handle && e.target.closest('#strip-sel');
   const start = selRange() || [0, duration()];
+  // A selection over the whole file cannot move, so the strip just seeks through it
+  const onSel = !handle && e.target.closest('#strip-sel') && start[1] - start[0] < duration() - 0.05;
   const t0 = stripTime(e);
   const minLen = Math.max(0.1, 1 / state.fps);
   let moved = false;
   strip.setPointerCapture(e.pointerId);
   const move = ev => {
+    // A hand shaking during a click is not a drag
+    if (!moved && ev !== e && Math.abs(ev.clientX - e.clientX) < 4) return;
     moved = true;
     const t = stripTime(ev);
     const d = duration();

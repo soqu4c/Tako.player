@@ -1336,7 +1336,9 @@ function audioRow(s, k) {
     range.style.setProperty('--fill', range.value / 2 * 100 + '%');
   };
   range.oninput = show;
-  range.ondblclick = () => { range.value = 1; show(); };
+  // On the number, not the slider: quick clicks on the slider must not throw it back to 100%
+  val.ondblclick = () => { range.value = 1; show(); };
+  val.title = 'Двойной клик — 100%';
   show();
   vol.append(range, val);
   row.append(box, vol);
@@ -1721,8 +1723,6 @@ function renderMixListen() {
 }
 $('#btn-mixlisten').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); mixListenMenu(r.left, r.top - 8 - 36 * state.audioStreams.length); };
 setInterval(renderMixListen, 1000);
-// double click on the volume slider: back to 100%
-$('#volume').addEventListener('dblclick', () => setVolume(1));
 
 // Keyboard zoom goes toward the mouse when it is over the picture, like the wheel does
 let lastMouse = null;

@@ -1231,9 +1231,11 @@ ipcMain.handle('editor-export', async (_e, o) => {
     if (c.image) args.push('-loop', '1', '-framerate', String(fps), '-t', num(c.dur), '-i', c.file);
     else args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
     // fitted into the frame, then the clip's own scale, rotation and opacity (Effect Controls)
-    const s = c.scale > 0 ? c.scale : 1;
+    // the editor works out the picture's size on screen (width and height may differ)
+    const even = v => Math.max(2, Math.round(v / 2) * 2);
+    const size = c.pw > 0 && c.ph > 0 ? `${even(c.pw)}:${even(c.ph)}` : `${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2`;
     const a = num((c.rot || 0) * Math.PI / 180);
-    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${Math.round(w * s)}:${Math.round(h * s)}:force_original_aspect_ratio=decrease:force_divisible_by=2,format=yuva420p`;
+    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${size},format=yuva420p`;
     if (c.rot) f += `,rotate=${a}:ow=rotw(${a}):oh=roth(${a}):c=none`;
     if (c.opacity != null && c.opacity < 1) f += `,colorchannelmixer=aa=${num(Math.max(0, c.opacity))}`;
     if (c.fadeIn > 0) f += `,fade=t=in:st=0:d=${num(c.fadeIn)}:alpha=1`;

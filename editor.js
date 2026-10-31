@@ -1087,21 +1087,20 @@ function dragTitle(e, c, d) {
 // type, with a reset arrow. Several selected clips change together.
 const fxOpen = recall('edFxOpen', { motion: true, opacity: true, volume: true, text: true, source: true });
 
-// The chain between Position X and Y, as Premiere's link for width and height
-ed.posLink = recall('edPosLink', false);
-function posLinkRow(rows) {
-  const b = document.createElement('button');
-  b.className = 'fx-link';
-  b.classList.toggle('on', ed.posLink);
-  b.title = ed.posLink ? 'X и Y связаны: меняете одно — так же меняется другое. Нажмите, чтобы развязать' : 'Связать X и Y: двигать оба одним ползунком';
-  b.innerHTML = '<svg class="i"><use href="#i-link"/></svg>';
-  b.onclick = () => {
-    ed.posLink = !ed.posLink;
-    store('edPosLink', ed.posLink);
-    renderInspector();
-  };
-  rows.append(b);
-}
+// Uniform scale: the chain between the width and height of Scale (as in After Effects)
+ed.scaleLink = recall('edScaleLink', true);
+
+// Rotation as After Effects shows it: whole turns and degrees, "1x+30°"
+const showRot = r => {
+  const turns = Math.trunc(r / 360);
+  const deg = Math.round((r - turns * 360) * 10) / 10;
+  return `${turns}x${deg < 0 ? '−' : '+'}${Math.abs(deg)}`;
+};
+const parseRot = s => {
+  const m = /^\s*(-?\d+)\s*x\s*([+\-−]?\s*[\d.,]+)/i.exec(s);
+  if (m) return Number(m[1]) * 360 + parseFloat(m[2].replace('−', '-').replace(/\s/g, '').replace(',', '.'));
+  return parseFloat(String(s).replace('−', '-').replace(',', '.'));
+};
 
 function renderInspector() {
   const body = $('#ed-insp-body');
@@ -1120,7 +1119,6 @@ function renderInspector() {
   const pics = sel.filter(x => trackOf(x.track).kind === 'video');
   const sounds = sel.filter(x => trackOf(x.track).kind === 'audio');
 
-  // header: clip name over a small bar of where it sits
   const head = document.createElement('div');
   head.className = 'fx-head';
   head.innerHTML = '<div class="fx-name"></div><div class="fx-tc"></div>';
@@ -1129,23 +1127,25 @@ function renderInspector() {
   head.querySelector('.fx-tc').textContent = `${trackOf(c.track).name} · ${tc(c.start)} – ${tc(clipEnd(c))} · длина ${tc(clipDur(c))}`;
   body.append(head);
 
+  const repaint = () => body.querySelectorAll('.fx-num').forEach(n => n.paint && n.paint());
+
+  // A folding section; "Сброс" on the right puts its values back
   const section = (key, title, fill, reset) => {
     const s = document.createElement('div');
     s.className = 'fx-sec';
     s.classList.toggle('open', fxOpen[key] !== false);
-    s.innerHTML = '<div class="fx-title"><svg class="i chev"><use href="#i-chevron"/></svg><i class="fx-badge">fx</i><span></span></div><div class="fx-rows"></div>';
+    s.innerHTML = '<div class="fx-title"><svg class="i chev"><use href="#i-chevron"/></svg><span></span></div><div class="fx-rows"></div>';
     s.querySelector('span').textContent = title;
     s.querySelector('.fx-title').onclick = e => {
-      if (e.target.closest('.fx-reset')) return;
+      if (e.target.closest('.fx-sreset')) return;
       fxOpen[key] = !s.classList.contains('open');
       store('edFxOpen', fxOpen);
       s.classList.toggle('open', fxOpen[key]);
     };
     if (reset) {
       const r = document.createElement('button');
-      r.className = 'fx-reset';
-      r.title = 'Сбросить';
-      r.innerHTML = '↺';
+      r.className = 'fx-sreset';
+      r.textContent = 'Сброс';
       r.onclick = () => { edCommit(); reset(); edChanged(); };
       s.querySelector('.fx-title').append(r);
     }
@@ -1153,22 +1153,20 @@ function renderInspector() {
     body.append(s);
   };
 
-  // one value: label, scrubbable number, optional unit and reset
-  const value = (rows, label, get, set, { min = -Infinity, max = Infinity, step = 1, unit = '', show, def, list = sel }) => {
-    const row = document.createElement('div');
-    row.className = 'fx-row';
-    row.innerHTML = '<span class="fx-label"></span><span class="fx-num" tabindex="0"></span><span class="fx-unit"></span>';
-    row.querySelector('.fx-label').textContent = label;
-    row.querySelector('.fx-unit').textContent = unit;
-    const num = row.querySelector('.fx-num');
+  // One blue number: drag it left or right (Shift faster, Alt finer) or click to type
+  const numEl = ({ get, set, min = -Infinity, max = Infinity, step = 1, unit = '', show, parse, list = sel }) => {
+    const wrap = document.createElement('span');
+    wrap.className = 'fx-val';
+    const num = document.createElement('span');
+    num.className = 'fx-num';
+    num.tabIndex = 0;
     const paint = () => { num.textContent = show ? show(get(c)) : String(Math.round(get(c) / step) * step).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); };
     paint();
     num.paint = paint;
     const apply = v => {
       v = clamp(v, min, max);
       for (const x of list) set(x, v);
-      // a linked value may have moved another one too
-      body.querySelectorAll('.fx-num').forEach(n => n.paint && n.paint());
+      repaint();
       store('edProject', ed.p);
       syncPreview(true);
     };
@@ -1188,10 +1186,9 @@ function renderInspector() {
         num.onpointermove = num.onpointerup = null;
         document.body.classList.remove('fx-scrub');
         if (moved) { renderTimeline(); return; }
-        // a click types a value
         const inp = document.createElement('input');
         inp.className = 'fx-input';
-        inp.value = num.textContent.replace('−∞', '-100').replace(',', '.');
+        inp.value = num.textContent.replace('−∞', '-100').replace(/−/g, '-');
         num.replaceWith(inp);
         inp.focus();
         inp.select();
@@ -1199,44 +1196,68 @@ function renderInspector() {
         const done = ok => {
           if (closed) return; // Enter closes it, and the blur that follows must not again
           closed = true;
+          inp.replaceWith(num); // back first, so the new value is painted on it
           if (ok) {
-            const v = parseFloat(inp.value.replace(',', '.'));
+            const v = parse ? parse(inp.value) : parseFloat(inp.value.replace(',', '.'));
             if (Number.isFinite(v)) { edCommit(); apply(v); renderTimeline(); }
           }
-          inp.replaceWith(num);
         };
         inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); if (ev.key === 'Escape') done(false); ev.stopPropagation(); };
         inp.onblur = () => done(true);
       };
     };
-    if (def !== undefined) {
-      const r = document.createElement('button');
-      r.className = 'fx-reset';
-      r.title = 'Сбросить';
-      r.innerHTML = '↺';
-      r.onclick = () => { edCommit(); apply(def); renderTimeline(); };
-      row.append(r);
+    wrap.append(num);
+    if (unit) wrap.append(Object.assign(document.createElement('span'), { className: 'fx-unit', textContent: unit }));
+    return wrap;
+  };
+
+  // A row: name, then one or two numbers (two with an optional chain between them)
+  const row = (rows, label, parts, { link } = {}) => {
+    const r = document.createElement('div');
+    r.className = 'fx-row' + (parts.length > 1 ? ' two' : '');
+    const l = document.createElement('span');
+    l.className = 'fx-label';
+    l.textContent = label;
+    const chain = document.createElement('span');
+    chain.className = 'fx-chain';
+    if (link) {
+      const b = document.createElement('button');
+      b.className = 'fx-link';
+      b.classList.toggle('on', link.on());
+      b.title = link.on() ? 'Пропорционально: ширина и высота меняются вместе. Нажмите, чтобы разделить' : 'Связать ширину и высоту';
+      b.innerHTML = '<svg class="i"><use href="#i-link"/></svg>';
+      b.onclick = () => { link.toggle(); renderInspector(); };
+      chain.append(b);
     }
-    rows.append(row);
+    r.append(chain, l, ...parts.map(numEl));
+    rows.append(r);
   };
 
   if (kind === 'video' || pics.length) {
     const p = pics.length ? pics : [c];
     const v = p[0];
-    section('motion', 'Движение', rows => {
-      // with the link on, X and Y move by the same amount
-      value(rows, 'Положение X', x => motion(x).x, (x, n) => { const d = n - motion(x).x; x.posX = n; if (ed.posLink) x.posY = motion(x).y + d; }, { step: 1, def: ed.p.w / 2, list: p });
-      posLinkRow(rows);
-      value(rows, 'Положение Y', x => motion(x).y, (x, n) => { const d = n - motion(x).y; x.posY = n; if (ed.posLink) x.posX = motion(x).x + d; }, { step: 1, def: ed.p.h / 2, list: p });
-      value(rows, 'Масштаб', x => motion(x).scale, (x, n) => { x.scale = n; }, { min: 1, max: 1000, step: 1, unit: '%', def: 100, list: p });
-      value(rows, 'Поворот', x => motion(x).rot, (x, n) => { x.rot = n; }, { min: -3600, max: 3600, step: 1, unit: '°', def: 0, list: p });
-    }, () => p.forEach(x => { x.posX = x.posY = x.scale = null; x.rot = 0; }));
-    section('opacity', 'Непрозрачность', rows => {
-      value(rows, 'Непрозрачность', x => motion(x).opacity, (x, n) => { x.opacity = n; }, { min: 0, max: 100, step: 1, unit: '%', def: 100, list: p });
-      value(rows, 'Появление', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: p });
-      value(rows, 'Исчезание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: p });
-      if (m && m.image) value(rows, 'Длительность', x => clipDur(x), (x, n) => { x.out = x.in + n; }, { min: 0.2, step: 0.1, unit: 'с', list: [v] });
-    }, () => p.forEach(x => { x.opacity = null; x.fadeIn = x.fadeOut = 0; }));
+    section('motion', 'Преобразование', rows => {
+      row(rows, 'Опорная точка', [
+        { get: x => motion(x).ax, set: (x, n) => { x.anchorX = n; }, list: p },
+        { get: x => motion(x).ay, set: (x, n) => { x.anchorY = n; }, list: p },
+      ]);
+      row(rows, 'Положение', [
+        { get: x => motion(x).x, set: (x, n) => { x.posX = n; }, list: p },
+        { get: x => motion(x).y, set: (x, n) => { x.posY = n; }, list: p },
+      ]);
+      // with the chain on, width and height of Scale stay equal
+      row(rows, 'Масштаб', [
+        { get: x => motion(x).sx, set: (x, n) => { x.scaleX = n; if (ed.scaleLink) x.scaleY = n; }, min: 1, max: 2000, unit: '%', list: p },
+        { get: x => motion(x).sy, set: (x, n) => { x.scaleY = n; if (ed.scaleLink) x.scaleX = n; }, min: 1, max: 2000, unit: '%', list: p },
+      ], { link: { on: () => ed.scaleLink, toggle: () => { ed.scaleLink = !ed.scaleLink; store('edScaleLink', ed.scaleLink); } } });
+      row(rows, 'Поворот', [{ get: x => motion(x).rot, set: (x, n) => { x.rot = n; }, min: -36000, max: 36000, unit: '°', show: showRot, parse: parseRot, list: p }]);
+      row(rows, 'Непрозрачность', [{ get: x => motion(x).opacity, set: (x, n) => { x.opacity = n; }, min: 0, max: 100, unit: '%', list: p }]);
+    }, () => p.forEach(x => { x.posX = x.posY = x.scale = x.scaleX = x.scaleY = x.anchorX = x.anchorY = x.opacity = null; x.rot = 0; }));
+    section('fade', 'Появление и исчезание', rows => {
+      row(rows, 'Появление', [{ get: x => x.fadeIn || 0, set: (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: p }]);
+      row(rows, 'Исчезание', [{ get: x => x.fadeOut || 0, set: (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: p }]);
+      if (m && m.image) row(rows, 'Длительность', [{ get: x => clipDur(x), set: (x, n) => { x.out = x.in + n; }, min: 0.2, step: 0.1, unit: 'с', list: [v] }]);
+    }, () => p.forEach(x => { x.fadeIn = x.fadeOut = 0; }));
   }
 
   if (kind === 'text') {
@@ -1249,15 +1270,16 @@ function renderInspector() {
       ta.oninput = () => { c.text = ta.value; store('edProject', ed.p); syncPreview(true); };
       ta.onchange = () => renderTimeline();
       rows.append(ta);
-      value(rows, 'Размер', x => x.size, (x, n) => { x.size = n; }, { min: 8, max: 400, step: 1, unit: 'px', def: 72 });
-      value(rows, 'Положение X', x => titleXY(x)[0] * ed.p.w, (x, n) => { const [cx, cy] = titleXY(x); const d = n - cx * ed.p.w; x.x = n / ed.p.w; x.y = ed.posLink ? cy + d / ed.p.h : cy; }, { step: 1, def: ed.p.w / 2 });
-      posLinkRow(rows);
-      value(rows, 'Положение Y', x => titleXY(x)[1] * ed.p.h, (x, n) => { const [cx, cy] = titleXY(x); const d = n - cy * ed.p.h; x.y = n / ed.p.h; x.x = ed.posLink ? cx + d / ed.p.w : cx; }, { step: 1, def: ed.p.h * 0.85 });
-      value(rows, 'Появление', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
-      value(rows, 'Исчезание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
+      row(rows, 'Положение', [
+        { get: x => titleXY(x)[0] * ed.p.w, set: (x, n) => { const [, cy] = titleXY(x); x.x = n / ed.p.w; x.y = cy; } },
+        { get: x => titleXY(x)[1] * ed.p.h, set: (x, n) => { const [cx] = titleXY(x); x.y = n / ed.p.h; x.x = cx; } },
+      ]);
+      row(rows, 'Размер', [{ get: x => x.size, set: (x, n) => { x.size = n; }, min: 8, max: 400, unit: 'px' }]);
+      row(rows, 'Появление', [{ get: x => x.fadeIn || 0, set: (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с' }]);
+      row(rows, 'Исчезание', [{ get: x => x.fadeOut || 0, set: (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с' }]);
       const colors = document.createElement('div');
       colors.className = 'fx-row fx-colors';
-      colors.innerHTML = '<span class="fx-label">Цвет</span>';
+      colors.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Цвет</span>';
       for (const col of ['white', 'yellow', '#ff5d3a', '#3ad1ff', '#7bff6b', 'black']) {
         const b = document.createElement('button');
         b.style.background = col;
@@ -1268,12 +1290,12 @@ function renderInspector() {
       rows.append(colors);
       const box = document.createElement('label');
       box.className = 'fx-row fx-check';
-      box.innerHTML = '<span class="fx-label">Подложка</span><input type="checkbox">';
+      box.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Подложка</span><input type="checkbox">';
       box.querySelector('input').checked = !!c.box;
       box.querySelector('input').onchange = ev => { edCommit(); for (const x of sel) x.box = ev.target.checked; edChanged(); };
       rows.append(box);
       const where = document.createElement('div');
-      where.className = 'fx-row fx-where';
+      where.className = 'fx-where';
       for (const [label, x, y] of [['Сверху', 0.5, 0.12], ['Центр', 0.5, 0.5], ['Снизу', 0.5, 0.85]]) {
         const b = document.createElement('button');
         b.textContent = label;
@@ -1281,7 +1303,7 @@ function renderInspector() {
         where.append(b);
       }
       rows.append(where);
-    });
+    }, () => sel.forEach(x => { x.x = 0.5; x.y = 0.85; x.size = 72; x.fadeIn = x.fadeOut = 0; }));
   }
 
   if (sounds.length) {
@@ -1294,21 +1316,21 @@ function renderInspector() {
           rows.append(n);
         }
         // the level in decibels like Premiere; 0 dB = as recorded, up to +6 dB (200%)
-        value(rows, 'Уровень', x => (x.volume > 0 ? 20 * Math.log10(x.volume) : -60), (x, n) => { x.volume = n <= -60 ? 0 : Math.pow(10, n / 20); },
-          { min: -60, max: 6, step: 0.1, unit: 'дБ', def: 0, list: [a], show: v => (v <= -60 ? '−∞' : (v >= 0 ? '+' : '') + v.toFixed(1)) });
-        value(rows, 'Нарастание', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: [a] });
-        value(rows, 'Затухание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0, list: [a] });
+        row(rows, 'Уровень', [{ get: x => (x.volume > 0 ? 20 * Math.log10(x.volume) : -60), set: (x, n) => { x.volume = n <= -60 ? 0 : Math.pow(10, n / 20); },
+          min: -60, max: 6, step: 0.1, unit: 'дБ', list: [a], show: v => (v <= -60 ? '−∞' : (v >= 0 ? '+' : '') + v.toFixed(1)) }]);
+        row(rows, 'Нарастание', [{ get: x => x.fadeIn || 0, set: (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: [a] }]);
+        row(rows, 'Затухание', [{ get: x => x.fadeOut || 0, set: (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, min: 0, step: 0.1, unit: 'с', list: [a] }]);
         const am = edMedia(a.media);
         if (am && am.audio.length > 1) {
-          const row = document.createElement('label');
-          row.className = 'fx-row';
-          row.innerHTML = '<span class="fx-label">Дорожка файла</span>';
+          const r = document.createElement('label');
+          r.className = 'fx-row';
+          r.innerHTML = '<span class="fx-chain"></span><span class="fx-label">Дорожка файла</span>';
           const s = document.createElement('select');
           am.audio.forEach((t, k) => s.add(new Option(`${k + 1}${t.name ? ' — ' + t.name : ''}`, k)));
           s.value = a.audioK || 0;
           s.onchange = () => { edCommit(); a.audioK = Number(s.value); edChanged(); };
-          row.append(s);
-          rows.append(row);
+          r.append(s);
+          rows.append(r);
         }
       }
     }, () => sounds.forEach(x => { x.volume = 1; x.fadeIn = x.fadeOut = 0; }));
@@ -1332,21 +1354,41 @@ function fadeAt(c, t) {
   if (c.fadeOut > 0 && clipDur(c) - local < c.fadeOut) a = Math.min(a, (clipDur(c) - local) / c.fadeOut);
   return clamp(a, 0, 1);
 }
-// Motion and opacity of a picture clip, as in Premiere's Effect Controls; the position is
-// the centre of the picture in frame pixels
-const motion = c => ({
-  x: c.posX != null ? c.posX : ed.p.w / 2,
-  y: c.posY != null ? c.posY : ed.p.h / 2,
-  scale: c.scale != null ? c.scale : 100,
-  rot: c.rot || 0,
-  opacity: c.opacity != null ? c.opacity : 100,
-});
-// The same on screen: the preview is the frame shrunk to fit
-function motionCss(c, el) {
+// Transform of a picture clip, as in After Effects' Layer Transform. The anchor point is in
+// the picture's own pixels (its middle by default); the position says where in the frame
+// the anchor lands; scale and rotation turn around the anchor.
+function motion(c) {
+  const m = edMedia(c.media);
+  const src = m && m.video && m.video.w ? m.video : { w: ed.p.w, h: ed.p.h };
+  const s = c.scale != null ? c.scale : 100; // older projects had one scale
+  return {
+    x: c.posX != null ? c.posX : ed.p.w / 2,
+    y: c.posY != null ? c.posY : ed.p.h / 2,
+    sx: c.scaleX != null ? c.scaleX : s,
+    sy: c.scaleY != null ? c.scaleY : s,
+    rot: c.rot || 0,
+    opacity: c.opacity != null ? c.opacity : 100,
+    ax: c.anchorX != null ? c.anchorX : src.w / 2,
+    ay: c.anchorY != null ? c.anchorY : src.h / 2,
+    sw: src.w,
+    sh: src.h,
+  };
+}
+// Where the picture ends up in the frame: its size, and where its middle is
+function placement(c) {
   const mo = motion(c);
+  const fit = Math.min(ed.p.w / mo.sw, ed.p.h / mo.sh); // first fitted into the frame
+  const w = mo.sw * fit * mo.sx / 100, h = mo.sh * fit * mo.sy / 100;
+  const ox = (mo.ax - mo.sw / 2) * fit * mo.sx / 100, oy = (mo.ay - mo.sh / 2) * fit * mo.sy / 100;
+  const a = mo.rot * Math.PI / 180;
+  return { w, h, cx: mo.x - (ox * Math.cos(a) - oy * Math.sin(a)), cy: mo.y - (ox * Math.sin(a) + oy * Math.cos(a)), rot: mo.rot, sx: mo.sx / 100, sy: mo.sy / 100, opacity: mo.opacity / 100 };
+}
+// The same on screen: the preview is the frame shrunk to fit, the picture sits in the middle
+function motionCss(c, el) {
+  const pl = placement(c);
   const k = $('#ed-screen').clientHeight / ed.p.h;
-  el.style.transform = `translate(${(mo.x - ed.p.w / 2) * k}px, ${(mo.y - ed.p.h / 2) * k}px) scale(${mo.scale / 100}) rotate(${mo.rot}deg)`;
-  return mo.opacity / 100;
+  el.style.transform = `translate(${(pl.cx - ed.p.w / 2) * k}px, ${(pl.cy - ed.p.h / 2) * k}px) rotate(${pl.rot}deg) scale(${pl.sx}, ${pl.sy})`;
+  return pl.opacity;
 }
 
 const clipAt = (track, t) => ed.p.clips.find(c => !c.off && c.track === track && c.start <= t && clipEnd(c) > t);
@@ -1701,9 +1743,9 @@ function exportSpec() {
     for (const c of ed.p.clips.filter(x => x.track === tr && !x.off).sort((a, b) => a.start - b.start)) {
       const m = edMedia(c.media);
       if (!m || !m.video) continue;
-      const mo = motion(c);
+      const pl = placement(c);
       spec.video.push({ file: m.path, vIndex: m.video.index, image: m.image, in: c.in, dur: clipDur(c), start: c.start, fadeIn: c.fadeIn, fadeOut: c.fadeOut,
-        x: mo.x, y: mo.y, scale: mo.scale / 100, rot: mo.rot, opacity: mo.opacity / 100 });
+        x: pl.cx, y: pl.cy, pw: pl.w, ph: pl.h, rot: pl.rot, opacity: pl.opacity });
     }
   }
   for (const c of ed.p.clips) {

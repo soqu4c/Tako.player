@@ -465,3 +465,20 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .fx-link .i { width: 13px; height: 13px; }
 .fx-link:hover { opacity: 1; background: rgba(255, 255, 255, .06); }
 .fx-link.on { color: #4c9bff; opacity: 1; }
+
+/* After Effects-like transform rows: [chain] name  value  value */
+.fx-row { grid-template-columns: 18px 1fr minmax(64px, auto) !important; column-gap: 8px; }
+.fx-row.two { grid-template-columns: 18px 1fr minmax(64px, auto) minmax(64px, auto) !important; }
+.fx-rows { padding: 2px 10px 10px 12px; }
+.fx-val { display: inline-flex; align-items: baseline; gap: 2px; justify-content: flex-end; }
+.fx-val .fx-unit { font-size: 11px; color: #4c9bff; }
+.fx-chain { display: grid; place-items: center; }
+.fx-link { display: grid; place-items: center; margin: 0; width: 18px; height: 18px; border-radius: 4px; color: var(--muted); opacity: .6; }
+.fx-row.two .fx-chain { grid-column: 1; }
+.fx-sreset { margin-left: auto; color: #4c9bff; font-size: 12px; font-weight: 500; padding: 1px 6px; border-radius: 4px; }
+.fx-sreset:hover { background: rgba(76, 155, 255, .12); }
+.fx-colors button { justify-self: start; }
+.fx-colors { grid-template-columns: 18px 1fr repeat(6, 18px) !important; }
+.fx-check { grid-template-columns: 18px 1fr auto !important; }
+.fx-where { display: flex; gap: 4px; margin: 6px 0 0 26px; }
+.fx-row select { grid-column: 3 / -1; }

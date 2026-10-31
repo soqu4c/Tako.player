@@ -400,6 +400,7 @@ const I18N_EN = {
   'Поддержать автора': 'Support the author',
   'Проверить обновления': 'Check for updates',
   'Версия:': 'Version:',
+  'Двойной клик — 100%': 'Double click — 100%',
   'Основная': 'Main',
   'Бета (видеоредактор)': 'Beta (video editor)',
   'Бета получает новое раньше, но может работать с ошибками': 'The beta gets new things first but may have bugs',

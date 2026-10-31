@@ -1305,7 +1305,9 @@ function audioRow(s, k) {
     range.style.setProperty('--fill', range.value / 2 * 100 + '%');
   };
   range.oninput = show;
-  range.ondblclick = () => { range.value = 1; show(); };
+  // On the number, not the slider: quick clicks on the slider must not throw it back to 100%
+  val.ondblclick = () => { range.value = 1; show(); };
+  val.title = 'Двойной клик — 100%';
   show();
   vol.append(range, val);
   row.append(box, vol);

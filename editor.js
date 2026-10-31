@@ -19,6 +19,13 @@ const BASE_TRACKS = [
 let ED_TRACKS = [];
 const trackOf = id => ED_TRACKS.find(t => t.id === id);
 const audioIds = () => ED_TRACKS.filter(t => t.kind === 'audio').map(t => t.id);
+// A sound track is not heard when it is muted, or when another one is soloed
+function trackSilent(id) {
+  const st = ed.p.tracks[id];
+  if (st.muted) return true;
+  const solo = audioIds().some(a => ed.p.tracks[a].solo);
+  return solo && !st.solo;
+}
 const IMG_RE = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const IMAGE_DUR = 5;
 
@@ -179,7 +186,8 @@ function edPlace(m, trackId, start) {
   const link = m.video && sounds.length ? ed.nextId : 0;
   const made = [];
   const base = { media: m.path, start: Math.max(0, start), in: 0, out: dur, volume: 1, fadeIn: 0, fadeOut: 0, link };
-  const isFree = id => !ed.p.clips.some(c => c.track === id && c.start < base.start + dur && clipEnd(c) > base.start);
+  // a few hundredths of overlap (rounding of file lengths) do not count
+  const isFree = id => !ed.p.clips.some(c => c.track === id && c.start < base.start + dur - 0.05 && clipEnd(c) > base.start + 0.05);
   const vTrack = trackId && trackOf(trackId).kind === 'video' ? trackId : ['V1', 'V2'].find(isFree) || 'V1';
   // sound: from the lane it was dropped on (or the first free one) downwards, skipping busy ones
   let aTracks = [];
@@ -236,6 +244,7 @@ const scroller = $('#ed-scroll');
 const xOf = t => t * ed.pps;
 const tOf = x => x / ed.pps;
 
+// Track headers as in Premiere: lock, then eye for pictures, M (mute) and S (solo) for sound
 function renderHeads() {
   const box = $('#ed-heads');
   box.innerHTML = '<div class="ed-ruler-pad"></div>';
@@ -243,15 +252,26 @@ function renderHeads() {
     const st = ed.p.tracks[tr.id];
     const h = document.createElement('div');
     h.className = `ed-trhead ${tr.kind}`;
-    h.innerHTML = '<b></b><span class="sp"></span>';
-    h.querySelector('b').textContent = tr.id;
     h.title = tr.name;
-    const btn = document.createElement('button');
-    btn.className = 'icon sm';
+    const toggle = (cls, on, title, html, flip) => {
+      const b = document.createElement('button');
+      b.className = `ed-tb ${cls}`;
+      b.classList.toggle('on', !!on);
+      b.title = title;
+      b.innerHTML = html;
+      b.onclick = () => { edCommit(); flip(); renderHeads(); edChanged(); };
+      h.append(b);
+      return b;
+    };
+    toggle('lock', st.locked, st.locked ? 'Дорожка заблокирована — нажмите, чтобы разблокировать' : 'Заблокировать дорожку',
+      `<svg class="i"><use href="#${st.locked ? 'i-lock' : 'i-unlock'}"/></svg>`, () => { st.locked = !st.locked; });
+    const name = document.createElement('b');
+    name.className = 'ed-trname';
+    name.textContent = tr.id;
+    h.append(name);
     if (tr.kind === 'audio') {
-      btn.title = st.muted ? 'Включить звук дорожки' : 'Выключить звук дорожки';
-      btn.innerHTML = `<svg class="i"><use href="#${st.muted ? 'i-mute' : 'i-vol'}"/></svg>`;
-      btn.onclick = () => { edCommit(); st.muted = !st.muted; renderHeads(); edChanged(); };
+      toggle('m', st.muted, 'Без звука (Mute)', 'M', () => { st.muted = !st.muted; });
+      toggle('s', st.solo, 'Только эта дорожка (Solo)', 'S', () => { st.solo = !st.solo; });
       const vol = document.createElement('input');
       vol.type = 'range';
       vol.min = 0;
@@ -266,43 +286,98 @@ function renderHeads() {
         store('edProject', ed.p);
         syncPreview(true);
       };
-      h.append(btn, vol);
+      h.append(vol);
     } else {
-      btn.title = st.hidden ? 'Показать дорожку' : 'Скрыть дорожку';
-      btn.innerHTML = `<svg class="i"><use href="#${st.hidden ? 'i-eye-off' : 'i-eye'}"/></svg>`;
-      btn.classList.toggle('off', st.hidden);
-      btn.onclick = () => { edCommit(); st.hidden = !st.hidden; renderHeads(); edChanged(); };
-      h.append(btn);
+      toggle('eye', !st.hidden, st.hidden ? 'Показать дорожку' : 'Скрыть дорожку',
+        `<svg class="i"><use href="#${st.hidden ? 'i-eye-off' : 'i-eye'}"/></svg>`, () => { st.hidden = !st.hidden; });
     }
-    h.classList.toggle('off', st.muted || st.hidden);
+    h.classList.toggle('off', trackSilent(tr.id) || st.hidden);
+    h.classList.toggle('locked', !!st.locked);
     box.append(h);
   }
 }
 
+// Timecode as in Premiere: hours:minutes:seconds:frames
+const fpsOf = () => ed.p.fps || 30;
+function tc(t) {
+  const fps = Math.round(fpsOf());
+  let f = Math.round(Math.max(0, t) * fpsOf());
+  const ff = f % fps;
+  f = Math.floor(f / fps);
+  const p = n => String(n).padStart(2, '0');
+  return `${p(Math.floor(f / 3600))}:${p(Math.floor(f / 60) % 60)}:${p(f % 60)}:${p(ff)}`;
+}
+// "1:30" "01:30:00" "00:01:30:12" or plain seconds "90"
+function parseTc(s) {
+  const parts = String(s).trim().replace(',', '.').split(/[:;]/).map(Number);
+  if (!parts.length || parts.some(n => !Number.isFinite(n))) return null;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 4) return parts[0] * 3600 + parts[1] * 60 + parts[2] + parts[3] / fpsOf();
+  return parts.reduce((a, n) => a * 60 + n, 0);
+}
+
+const timelineLength = () => Math.max(edDuration() + 30, tOf(scroller.clientWidth) + 5);
+
 function renderRuler() {
   const ruler = $('#ed-ruler');
   ruler.innerHTML = '';
-  const total = Math.max(edDuration() + 30, tOf(scroller.clientWidth) + 5);
+  const total = timelineLength();
   $('#ed-canvas').style.width = xOf(total) + 'px';
-  // a label every 50+ px, on a round number of seconds
-  const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
-  const step = steps.find(s => xOf(s) >= 70) || 600;
-  for (let t = 0; t <= total; t += step) {
+  // labels at least 90 px apart on a round time; small ticks in between
+  const steps = [1 / fpsOf(), 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+  const step = steps.find(s => xOf(s) >= 90) || 3600;
+  const minor = step / 5;
+  const from = Math.max(0, Math.floor(tOf(scroller.scrollLeft) / step) * step);
+  const to = Math.min(total, tOf(scroller.scrollLeft + scroller.clientWidth) + step);
+  for (let t = from; t <= to; t += minor) {
+    const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
     const tick = document.createElement('span');
+    tick.className = major ? 'major' : 'minor';
     tick.style.left = xOf(t) + 'px';
-    tick.textContent = step < 1 ? fmtEd(t).replace(/0$/, '') : fmt(t);
+    if (major) tick.textContent = tc(t);
     ruler.append(tick);
   }
+  // the yellow bar shows how far the edit goes, like Premiere's work area
+  const work = document.createElement('div');
+  work.className = 'ed-work';
+  work.style.width = xOf(edDuration()) + 'px';
+  ruler.append(work);
+  for (const t of ed.p.markers || []) {
+    const mk = document.createElement('i');
+    mk.className = 'ed-mark';
+    mk.style.left = xOf(t) + 'px';
+    mk.title = `Метка ${tc(t)} — клик: перейти, двойной клик: удалить`;
+    mk.onpointerdown = e => { e.stopPropagation(); seekEd(t); };
+    mk.ondblclick = e => {
+      e.stopPropagation();
+      edCommit();
+      ed.p.markers = ed.p.markers.filter(x => x !== t);
+      edChanged();
+    };
+    ruler.append(mk);
+  }
+  renderZoombar();
 }
 
+function addMarker() {
+  edCommit();
+  ed.p.markers = [...new Set([...(ed.p.markers || []), Math.round(ed.t * 1000) / 1000])].sort((a, b) => a - b);
+  edChanged();
+}
+$('#ed-marker').onclick = addMarker;
+
 function renderTimeline() {
+  // frames asked for by the previous drawing but not taken yet may be off screen now
+  for (const q of thumbQueue) edThumbs.delete(q.key);
+  thumbQueue.length = 0;
   renderRuler();
   lanesBox.innerHTML = '';
   for (const tr of ED_TRACKS) {
     const lane = document.createElement('div');
     lane.className = `ed-lane ${tr.kind}`;
     lane.dataset.track = tr.id;
-    lane.classList.toggle('off', ed.p.tracks[tr.id].muted || ed.p.tracks[tr.id].hidden);
+    lane.classList.toggle('off', (tr.kind === 'audio' && trackSilent(tr.id)) || ed.p.tracks[tr.id].hidden);
+    lane.classList.toggle('locked', !!ed.p.tracks[tr.id].locked);
     for (const c of ed.p.clips.filter(x => x.track === tr.id)) lane.append(clipEl(c, tr));
     lanesBox.append(lane);
   }
@@ -331,11 +406,12 @@ function clipEl(c, tr) {
     const cv = document.createElement('canvas');
     cv.className = 'ed-wave';
     el.prepend(cv);
-    drawClipWave(cv, c, w);
+    drawClipWave(cv, c, el);
     const y = (1 - c.volume / 2) * 100;
     el.insertAdjacentHTML('beforeend', `<svg class="ed-env" viewBox="0 0 ${w} 100" preserveAspectRatio="none"><polyline points="0,${c.fadeIn ? 100 : y} ${fi},${y} ${w - fo},${y} ${w},${c.fadeOut ? 100 : y}"/></svg>`
       + `<i class="ed-vol" style="top: calc(${y}% - 4px); left: ${fi}px; right: ${fo}px" title="Тяните вверх или вниз — громкость (${Math.round(c.volume * 100)}%)"></i>`);
   } else {
+    if (tr.kind === 'video' && m) el.prepend(filmStrip(c, m));
     if (c.fadeIn > 0) el.style.setProperty('--fi', fi + 'px');
     if (c.fadeOut > 0) el.style.setProperty('--fo', fo + 'px');
     el.classList.toggle('fi', c.fadeIn > 0);
@@ -349,36 +425,70 @@ function clipEl(c, tr) {
 // The whole file's peaks come from main.js (all its sound tracks are read in one pass and
 // cached); a clip draws the part between its in and out points.
 
-const edWaves = new Map(); // "path|index" -> peaks, or 'loading'
+const edWaves = new Map(); // "path|index" -> peaks, or { partial, done } while being read
+const waveIds = new Map(); // request id -> "path|index"
 const wavePoints = m => clamp(Math.round(m.dur * 20), 200, 40000);
+let waveRedraw = 0;
 
-function drawClipWave(cv, c, w) {
+// A long recording takes a while: what is read so far is drawn, with how far it got
+api.onWaveformProgress(({ id, peaks, done }) => {
+  const key = waveIds.get(id);
+  if (!key || Array.isArray(edWaves.get(key))) return;
+  edWaves.set(key, { partial: peaks, done });
+  if (!waveRedraw) waveRedraw = setTimeout(() => { waveRedraw = 0; if (currentView === 'editor') renderTimeline(); }, 800);
+});
+
+// The part of a clip that is on screen, in px from the clip's left edge
+function visiblePart(c) {
+  const left = xOf(c.start);
+  const a = Math.max(0, scroller.scrollLeft - 100 - left);
+  const b = Math.min(xOf(clipDur(c)), scroller.scrollLeft + scroller.clientWidth + 100 - left);
+  return b > a ? [a, b] : null;
+}
+
+function drawClipWave(cv, c, el) {
   const m = edMedia(c.media);
   const a = m && m.audio[c.audioK || 0];
   if (!a) return;
   const key = `${m.path}|${a.index}`;
-  const peaks = edWaves.get(key);
+  let peaks = edWaves.get(key);
   if (!peaks) {
-    edWaves.set(key, 'loading');
-    api.waveform({ id: newJob(), file: m.path, index: a.index, points: wavePoints(m) })
+    const id = newJob();
+    waveIds.set(id, key);
+    edWaves.set(key, { partial: null, done: 0 });
+    api.waveform({ id, file: m.path, index: a.index, points: wavePoints(m) })
       .then(p => { edWaves.set(key, p); renderTimeline(); })
-      .catch(() => edWaves.delete(key));
-    return;
+      .catch(() => edWaves.delete(key))
+      .finally(() => waveIds.delete(id));
+    peaks = edWaves.get(key);
   }
-  if (peaks === 'loading') return;
-  const width = Math.min(Math.round(w), 8000);
-  const h = 34;
+  if (!Array.isArray(peaks)) {
+    const note = document.createElement('span');
+    note.className = 'ed-wave-note';
+    note.textContent = `звуковая волна строится… ${Math.round(peaks.done * 100)}%`;
+    el.append(note);
+    if (!peaks.partial) return;
+    peaks = peaks.partial;
+  }
+  // only the visible stretch is drawn, so a long recording stays sharp at any zoom
+  const part = visiblePart(c);
+  if (!part) return;
+  const [x0, x1] = part;
+  const width = Math.round(x1 - x0);
+  const h = 40;
   cv.width = width;
   cv.height = h;
+  cv.style.left = x0 + 'px';
+  cv.style.width = width + 'px';
   const g = cv.getContext('2d');
-  g.fillStyle = 'rgba(0, 0, 0, .3)';
+  g.fillStyle = 'rgba(0, 0, 0, .32)';
   const per = peaks.length / m.dur; // points per second of the file
   // quiet recordings are drawn taller, so their shape is still visible
-  if (peaks.max == null) peaks.max = peaks.reduce((a, b) => Math.max(a, b), 0);
+  if (peaks.max == null) peaks.max = peaks.reduce((p, v) => Math.max(p, v), 0);
   const gain = Math.min(8, 0.95 / Math.max(0.01, peaks.max));
   for (let x = 0; x < width; x++) {
-    const t0 = c.in + (x / width) * clipDur(c);
-    const t1 = c.in + ((x + 1) / width) * clipDur(c);
+    const t0 = c.in + tOf(x0 + x);
+    const t1 = c.in + tOf(x0 + x + 1);
     let v = 0;
     for (let i = Math.floor(t0 * per), e = Math.max(i + 1, Math.ceil(t1 * per)); i < e && i < peaks.length; i++) v = Math.max(v, peaks[i]);
     const bar = Math.max(1, Math.min(1, v * gain) * h);
@@ -386,35 +496,143 @@ function drawClipWave(cv, c, w) {
   }
 }
 
+// ---------- film strip on video clips
+//
+// Frames are taken by ffmpeg (frame-thumb in main.js), two at a time, newest wishes first,
+// and kept for the session. Only the slots on screen are asked for.
+
+const edThumbs = new Map(); // "path|time" -> data URL, or '' while loading
+const thumbQueue = [];
+let thumbBusy = 0;
+const THUMB_W = 56;
+
+function pumpThumbs() {
+  while (thumbBusy < 2 && thumbQueue.length) {
+    const { file, time, key } = thumbQueue.pop();
+    thumbBusy++;
+    const done = url => {
+      thumbBusy--;
+      edThumbs.set(key, url || 'none');
+      for (const img of document.querySelectorAll('img.ed-thumb')) if (img.dataset.key === key && url) img.src = url;
+      pumpThumbs();
+    };
+    (IMG_RE.test(file) ? Promise.resolve(api.toUrl(file)) : api.frameThumb({ file, time })).then(done, () => done(null));
+  }
+}
+
+function filmStrip(c, m) {
+  const strip = document.createElement('div');
+  strip.className = 'ed-strip';
+  const part = visiblePart(c);
+  if (!part) return strip;
+  const step = tOf(THUMB_W);
+  for (let k = Math.floor(part[0] / THUMB_W); k * THUMB_W < part[1]; k++) {
+    // times on a grid, so the same frames are reused while scrolling
+    const time = m.image ? 0 : Math.min(m.dur - 0.05, Math.round((c.in + k * step) * 10) / 10);
+    const key = `${m.path}|${time}`;
+    const img = document.createElement('img');
+    img.className = 'ed-thumb';
+    img.dataset.key = key;
+    img.style.left = k * THUMB_W + 'px';
+    const have = edThumbs.get(key);
+    if (have && have !== 'none') img.src = have;
+    else if (have === undefined) {
+      edThumbs.set(key, '');
+      thumbQueue.push({ file: m.path, time, key });
+    }
+    strip.append(img);
+  }
+  setTimeout(pumpThumbs);
+  return strip;
+}
+
 function placePlayhead() {
   $('#ed-playhead').style.left = xOf(ed.t) + 'px';
   $('#ed-time').textContent = `${fmtEd(ed.t)} / ${fmtEd(edDuration())}`;
+  if (document.activeElement !== $('#ed-tc')) $('#ed-tc').value = tc(ed.t);
 }
 
-// Zoom: the slider is logarithmic, 2…400 px per second
+// The big timecode can be typed into
+$('#ed-tc').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const t = parseTc(e.target.value);
+    if (t !== null) seekEd(t);
+    e.target.blur();
+  } else if (e.key === 'Escape') e.target.blur();
+});
+$('#ed-tc').addEventListener('blur', () => { $('#ed-tc').value = tc(ed.t); });
+$('#ed-tc').addEventListener('focus', e => e.target.select());
+
+// Zoom: 0.02…400 px per second (a whole long recording fits, or single frames)
 function setZoom(pps, anchorT = ed.t) {
   const before = xOf(anchorT) - scroller.scrollLeft;
-  ed.pps = clamp(pps, 2, 400);
-  $('#ed-zoom').value = Math.round(Math.log(ed.pps / 2) / Math.log(200) * 100);
+  ed.pps = clamp(pps, 0.02, 400);
   renderTimeline();
   scroller.scrollLeft = xOf(anchorT) - before;
 }
-$('#ed-zoom').oninput = e => setZoom(2 * Math.pow(200, e.target.value / 100));
 scroller.addEventListener('wheel', e => {
-  if (!e.ctrlKey) return;
+  if (!e.ctrlKey && !e.altKey) return;
   e.preventDefault();
   const r = scroller.getBoundingClientRect();
   setZoom(ed.pps * (e.deltaY < 0 ? 1.2 : 1 / 1.2), tOf(e.clientX - r.left + scroller.scrollLeft));
 }, { passive: false });
+// Backslash fits the whole edit, as in Premiere
+const zoomToFit = () => { setZoom((scroller.clientWidth - 40) / Math.max(1, edDuration()), 0); scroller.scrollLeft = 0; };
 
-// Snap points: clip edges and the playhead, within 8 px
+// The bar under the timeline: its thumb is the visible part; drag it to scroll, drag its
+// ends to zoom in or out
+function renderZoombar() {
+  const bar = $('.ed-zoombar');
+  const total = Math.max(1, xOf(timelineLength()));
+  const w = bar.clientWidth;
+  const thumb = $('#ed-zoomthumb');
+  thumb.style.left = (scroller.scrollLeft / total) * w + 'px';
+  thumb.style.width = Math.max(24, Math.min(1, scroller.clientWidth / total) * w) + 'px';
+}
+$('#ed-zoomthumb').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const thumb = $('#ed-zoomthumb');
+  thumb.setPointerCapture(e.pointerId);
+  const bar = $('.ed-zoombar').getBoundingClientRect();
+  const end = e.target.classList.contains('l') ? 'l' : e.target.classList.contains('r') ? 'r' : null;
+  const r0 = thumb.getBoundingClientRect();
+  const x0 = e.clientX;
+  const len = timelineLength();
+  const sl0 = scroller.scrollLeft;
+  thumb.onpointermove = ev => {
+    const dx = ev.clientX - x0;
+    if (!end) {
+      scroller.scrollLeft = sl0 + dx / bar.width * xOf(len);
+      return;
+    }
+    // new visible span from the thumb's new edges
+    let a = r0.left - bar.left, b = r0.right - bar.left;
+    if (end === 'l') a = clamp(a + dx, 0, b - 12);
+    else b = clamp(b + dx, a + 12, bar.width);
+    const t0 = (a / bar.width) * len, t1 = (b / bar.width) * len;
+    ed.pps = clamp(scroller.clientWidth / Math.max(0.05, t1 - t0), 0.02, 400);
+    renderTimeline();
+    scroller.scrollLeft = xOf(t0);
+  };
+  thumb.onpointerup = () => { thumb.onpointermove = thumb.onpointerup = null; };
+});
+
+// Snap points: clip edges, marks and the playhead, within 8 px
 function snapPoints(exclude) {
-  const pts = [0, ed.t];
+  const pts = [0, ed.t, ...(ed.p.markers || [])];
   for (const c of ed.p.clips) if (!exclude.has(c.id)) pts.push(c.start, clipEnd(c));
   return pts;
 }
+ed.snap = recall('edSnap', true);
+ed.linkMove = recall('edLinked', true);
+function renderToggles() {
+  $('#ed-snap').classList.toggle('on', ed.snap);
+  $('#ed-linked').classList.toggle('on', ed.linkMove);
+}
+$('#ed-snap').onclick = () => { ed.snap = !ed.snap; store('edSnap', ed.snap); renderToggles(); };
+$('#ed-linked').onclick = () => { ed.linkMove = !ed.linkMove; store('edLinked', ed.linkMove); renderToggles(); };
 function snap(t, pts) {
-  if (!$('#ed-snap').checked) return { t, hit: null };
+  if (!ed.snap) return { t, hit: null };
   let best = null;
   for (const p of pts) if (Math.abs(xOf(p - t)) <= 8 && (best === null || Math.abs(p - t) < Math.abs(best - t))) best = p;
   return best === null ? { t, hit: null } : { t: best, hit: best };
@@ -427,9 +645,17 @@ function showSnap(t) {
 
 const canvasX = e => e.clientX - $('#ed-canvas').getBoundingClientRect().left;
 
+const isLocked = c => !!ed.p.tracks[c.track].locked;
+// linked halves go along unless linked moving is switched off
+const partners = c => (ed.linkMove ? linked(c) : [c]).filter(x => !isLocked(x));
+
 lanesBox.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
-  const el = e.target.closest('.ed-clip');
+  if (ed.tool === 'hand') return panTimeline(e);
+  if (ed.tool === 'track') return trackSelect(e);
+  let el = e.target.closest('.ed-clip');
+  // clips on a locked track cannot be picked or changed
+  if (el && isLocked(ed.p.clips.find(x => x.id === Number(el.dataset.id)))) el = null;
   if (!el) {
     if (!e.shiftKey) ed.sel.clear();
     seekEd(tOf(canvasX(e)));
@@ -452,6 +678,35 @@ lanesBox.addEventListener('pointerdown', e => {
   const edge = e.target.classList.contains('ed-edge') ? (e.target.classList.contains('l') ? 'l' : 'r') : null;
   dragClips(e, c, edge);
 });
+
+// Hand: drag the timeline sideways (and up and down)
+function panTimeline(e) {
+  lanesBox.setPointerCapture(e.pointerId);
+  const x0 = e.clientX, y0 = e.clientY, sl = scroller.scrollLeft, st = scroller.scrollTop;
+  lanesBox.classList.add('panning');
+  lanesBox.onpointermove = ev => {
+    scroller.scrollLeft = sl - (ev.clientX - x0);
+    scroller.scrollTop = st - (ev.clientY - y0);
+  };
+  lanesBox.onpointerup = () => {
+    lanesBox.onpointermove = lanesBox.onpointerup = null;
+    lanesBox.classList.remove('panning');
+  };
+}
+
+// Track select forward: everything from the click onwards (Shift: only on this track),
+// then it can be dragged as one piece to open or close a gap
+function trackSelect(e) {
+  const t = tOf(canvasX(e));
+  const lane = e.target.closest('.ed-lane');
+  const list = ed.p.clips.filter(c => !isLocked(c) && clipEnd(c) > t + 1e-6 && (!e.shiftKey || (lane && c.track === lane.dataset.track)));
+  ed.sel = new Set(list.map(c => c.id));
+  renderTimeline();
+  renderInspector();
+  if (!list.length) return;
+  const first = list.reduce((a, b) => (b.start < a.start ? b : a));
+  dragClips(e, first, null);
+}
 
 // The volume line on a clip: up is louder (top = 200%, middle = 100%)
 function dragLevel(e, c) {
@@ -496,7 +751,7 @@ function dragFade(e, c, key) {
 
 function dragClips(e, c, edge) {
   const picked = ed.p.clips.filter(x => ed.sel.has(x.id));
-  const group = edge ? linked(c) : [...new Set(picked.flatMap(linked))];
+  const group = edge ? partners(c) : [...new Set(picked.flatMap(partners))];
   const orig = new Map(group.map(x => [x.id, { ...x }]));
   const ids = new Set(group.map(x => x.id));
   const pts = snapPoints(ids);
@@ -562,7 +817,7 @@ function dragClips(e, c, edge) {
 
 function splitClips(list, t) {
   const cut = [];
-  for (const c of list) for (const x of linked(c)) if (!cut.includes(x) && x.start + 0.02 < t && clipEnd(x) - 0.02 > t) cut.push(x);
+  for (const c of list) for (const x of partners(c)) if (!cut.includes(x) && x.start + 0.02 < t && clipEnd(x) - 0.02 > t) cut.push(x);
   if (!cut.length) return;
   edCommit();
   const newLink = new Map();
@@ -581,13 +836,13 @@ function splitClips(list, t) {
 
 function splitAtPlayhead() {
   const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
-  splitClips(sel.length ? sel : ed.p.clips, ed.t);
+  splitClips((sel.length ? sel : ed.p.clips).filter(c => !isLocked(c)), ed.t);
 }
 
 function deleteSelected() {
   if (!ed.sel.size) return;
   edCommit();
-  ed.p.clips = ed.p.clips.filter(c => !ed.sel.has(c.id));
+  ed.p.clips = ed.p.clips.filter(c => !ed.sel.has(c.id) || isLocked(c));
   ed.sel.clear();
   edChanged();
 }
@@ -912,7 +1167,7 @@ function syncPreview(force) {
       for (let k = 0; k < el.audioTracks.length; k++) el.audioTracks[k].enabled = k === (c.audioK || 0);
     } else if (!el.audioTracks) el.addEventListener('loadedmetadata', () => syncPreview(), { once: true });
     el.volume = clamp(c.volume * st.volume * fadeAt(c, t), 0, 1);
-    el.muted = st.muted;
+    el.muted = trackSilent(c.track);
     syncEl(el, m.path, c.in + (t - c.start), force && !ed.playing);
   }
   for (const [id, el] of edAudio) {
@@ -1020,7 +1275,13 @@ function fitScreen() {
 new ResizeObserver(fitScreen).observe($('#ed-screen-wrap'));
 new ResizeObserver(() => renderRuler()).observe(scroller);
 // track names follow the lanes when the timeline scrolls up and down
-scroller.addEventListener('scroll', () => { $('#ed-heads').scrollTop = scroller.scrollTop; });
+scroller.addEventListener('scroll', () => {
+  $('#ed-heads').scrollTop = scroller.scrollTop;
+  renderRuler();
+  // film strips are drawn only where they can be seen
+  clearTimeout(ed.stripTimer);
+  ed.stripTimer = setTimeout(renderTimeline, 120);
+});
 
 // ---------- project settings
 
@@ -1071,7 +1332,7 @@ $('#ed-new').onclick = async () => {
 function setTool(tool) {
   ed.tool = tool;
   for (const b of document.querySelectorAll('[data-edtool]')) b.classList.toggle('on', b.dataset.edtool === tool);
-  lanesBox.classList.toggle('razor', tool === 'razor');
+  for (const t of ['razor', 'hand', 'track']) lanesBox.classList.toggle(t, tool === t);
 }
 for (const b of document.querySelectorAll('[data-edtool]')) b.onclick = () => setTool(b.dataset.edtool);
 $('#ed-split').onclick = splitAtPlayhead;
@@ -1091,6 +1352,10 @@ document.addEventListener('keydown', e => {
     KeyS: splitAtPlayhead,
     KeyC: () => setTool('razor'),
     KeyV: () => setTool('select'),
+    KeyA: () => setTool('track'),
+    KeyH: () => setTool('hand'),
+    KeyM: addMarker,
+    Backslash: zoomToFit,
     KeyT: addText,
     Delete: deleteSelected,
     Backspace: deleteSelected,
@@ -1126,7 +1391,7 @@ function exportSpec() {
   }
   for (const c of ed.p.clips) {
     const st = ed.p.tracks[c.track];
-    if (trackOf(c.track).kind !== 'audio' || st.muted) continue;
+    if (trackOf(c.track).kind !== 'audio' || trackSilent(c.track)) continue;
     const m = edMedia(c.media);
     if (!m || !m.audio.length) continue;
     const vol = c.volume * st.volume;
@@ -1288,6 +1553,7 @@ $('#nav-editor').onclick = () => showView('editor');
 
 renderBin();
 renderHeads();
+renderToggles();
 renderProjectSettings();
 setZoom(ed.pps);
 renderInspector();

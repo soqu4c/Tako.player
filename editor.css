@@ -21,7 +21,7 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: minmax(220px, 1fr) auto minmax(240px, 42%);
+  grid-template-rows: minmax(220px, 1fr) auto minmax(280px, 48%);
   background: var(--bg-2);
 }
 .ed-top { display: grid; grid-template-columns: 240px 1fr 260px; min-height: 0; border-bottom: 1px solid var(--line); }
@@ -136,45 +136,132 @@
 .ed-zoom input { width: 110px; }
 .ed-flex { flex: 1; }
 
-/* timeline */
-.ed-timeline { display: grid; grid-template-columns: var(--head-w) 1fr; min-height: 0; }
+/* timeline, laid out like Premiere's: tools | (timecode / tracks / zoom bar) */
+.ed-timeline { display: grid; grid-template-columns: 44px 1fr; min-height: 0; }
+.ed-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-right: 1px solid var(--line);
+  background: rgba(0, 0, 0, .15);
+}
+.ed-tools button { width: 32px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: var(--soft); }
+.ed-tools button:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
+.ed-tools button.on { background: #2d6fe0; color: #fff; }
+.ed-tools .i { width: 17px; height: 17px; }
+.ed-tl { display: grid; grid-template-rows: auto minmax(0, 1fr) 16px; min-width: 0; min-height: 0; }
+.ed-tl-head { display: flex; align-items: center; gap: 14px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#ed-tc {
+  width: 128px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: #4c9bff;
+  font: 600 17px/1.2 Consolas, 'Cascadia Mono', monospace;
+  letter-spacing: .02em;
+}
+#ed-tc:hover, #ed-tc:focus { border-color: var(--line-2); outline: none; background: rgba(0, 0, 0, .25); }
+.ed-toggles { display: flex; gap: 4px; }
+.ed-toggles button { width: 30px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); background: rgba(255, 255, 255, .05); }
+.ed-toggles button.on { color: var(--text); background: rgba(255, 255, 255, .14); }
+.ed-toggles .i { width: 16px; height: 16px; }
+.ed-tl-body { display: grid; grid-template-columns: var(--head-w) minmax(0, 1fr); min-height: 0; }
+.ed { --head-w: 168px; }
 #ed-heads { border-right: 1px solid var(--line); overflow: hidden; }
-.ed-ruler-pad { position: sticky; top: 0; z-index: 1; height: 26px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.ed-ruler-pad { position: sticky; top: 0; z-index: 1; height: 30px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .ed-trhead {
   height: var(--lane-h);
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 6px 0 10px;
+  gap: 5px;
+  padding: 0 8px 0 6px;
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
-.ed-trhead b { width: 24px; color: var(--soft); }
-.ed-trhead .sp { flex: 0; }
-.ed-trhead input[type=range] { width: 56px; }
-.ed-trhead.off b { color: var(--muted); text-decoration: line-through; }
-#ed-scroll { overflow: auto; position: relative; }
+.ed-trname {
+  min-width: 30px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: #fff;
+  background: #2d6fe0;
+}
+.ed-trhead.text .ed-trname { background: #7d55d6; }
+.ed-trhead.audio .ed-trname { background: #1f8f5c; }
+.ed-trhead.off .ed-trname { opacity: .45; }
+.ed-tb { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; color: var(--muted); font-size: 11px; font-weight: 700; }
+.ed-tb:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+.ed-tb .i { width: 14px; height: 14px; }
+.ed-tb.lock.on { color: #ffb347; }
+.ed-tb.eye.on { color: var(--text); }
+.ed-tb.m.on { background: #2f9e6a; color: #fff; }
+.ed-tb.s.on { background: #d9a628; color: #111; }
+.ed-trhead input[type=range] { width: 48px; margin-left: auto; }
+.ed-lane.locked { background-image: repeating-linear-gradient(-45deg, transparent 0 8px, rgba(255, 255, 255, .025) 8px 16px); }
+.ed-lane.locked .ed-clip { filter: saturate(.4) brightness(.8); cursor: not-allowed; }
+#ed-scroll { overflow: auto; position: relative; scrollbar-width: none; }
+#ed-scroll::-webkit-scrollbar { height: 0; }
 #ed-canvas { position: relative; min-height: 100%; }
 #ed-ruler {
   position: sticky;
   top: 0;
   z-index: 3;
-  height: 26px;
+  height: 30px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-2);
   cursor: col-resize;
 }
-#ed-ruler span {
-  position: absolute;
-  top: 0;
+#ed-ruler span { position: absolute; bottom: 0; border-left: 1px solid var(--line-2); pointer-events: none; }
+#ed-ruler span.minor { height: 5px; }
+#ed-ruler span.major {
   height: 100%;
-  padding: 5px 0 0 4px;
-  border-left: 1px solid var(--line-2);
-  font-size: 10.5px;
+  padding: 3px 0 0 4px;
+  font: 10.5px Consolas, 'Cascadia Mono', monospace;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
+  white-space: nowrap;
 }
+.ed-work { position: absolute; left: 0; bottom: 0; height: 3px; background: #e8c53a; pointer-events: none; }
+.ed-mark {
+  position: absolute;
+  top: 14px;
+  width: 10px;
+  height: 12px;
+  margin-left: -5px;
+  background: #3ad17e;
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+  cursor: pointer;
+  z-index: 1;
+}
+.ed-zoombar { position: relative; border-top: 1px solid var(--line); background: rgba(0, 0, 0, .25); }
+#ed-zoomthumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .22);
+  cursor: grab;
+}
+#ed-zoomthumb:hover { background: rgba(255, 255, 255, .32); }
+#ed-zoomthumb i { position: absolute; top: -1px; width: 10px; height: 10px; border-radius: 50%; background: #e6e6e6; border: 1px solid #555; cursor: ew-resize; }
+#ed-zoomthumb i.l { left: -5px; }
+#ed-zoomthumb i.r { right: -5px; }
+#ed-lanes.hand { cursor: grab; }
+#ed-lanes.hand .ed-clip, #ed-lanes.track .ed-clip { cursor: inherit; }
+#ed-lanes.panning { cursor: grabbing; }
+#ed-lanes.track { cursor: e-resize; }
+#ed-lanes.hand .ed-fh, #ed-lanes.hand .ed-vol, #ed-lanes.hand .ed-edge,
+#ed-lanes.track .ed-fh, #ed-lanes.track .ed-vol, #ed-lanes.track .ed-edge { display: none; }
+/* film strip and waveform progress */
+.ed-strip { position: absolute; left: 0; right: 0; top: 18px; bottom: 0; overflow: hidden; pointer-events: none; }
+.ed-thumb { position: absolute; top: 0; height: 100%; width: 56px; object-fit: cover; border-right: 1px solid rgba(0, 0, 0, .35); }
+.ed-thumb:not([src]) { visibility: hidden; }
+.ed-clip.video .ed-name { z-index: 1; }
+.ed-wave-note { position: absolute; right: 8px; top: 4px; font-size: 10.5px; color: rgba(255, 255, 255, .8); pointer-events: none; z-index: 1; }
 .ed-lane { position: relative; height: var(--lane-h); border-bottom: 1px solid var(--line); }
 .ed-lane.text { background: rgba(176, 120, 255, .03); }
 .ed-lane.video { background: rgba(80, 150, 255, .03); }

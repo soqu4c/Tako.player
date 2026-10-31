@@ -10,6 +10,14 @@
 <body data-view="player">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path fill="currentColor" d="M5 2.5l13.5 12.2-6.3.6 3.7 7.1-2.6 1.3-3.7-7.2L5 21z"/></symbol>
+    <symbol id="i-track-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="14" rx="1.5" stroke-dasharray="3 2.5"/><path d="M13 12h8"/><path d="M18 8l3 4-3 4"/></symbol>
+    <symbol id="i-razor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 3.5l6 6-11 11-6-6z"/><path d="M11 7l6 6"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11V4a1.5 1.5 0 0 1 3 0v7"/><path d="M14 11V5.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.6-2.8L3.7 15.6a1.6 1.6 0 0 1 2.5-2L8 15.5"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h4v9a3 3 0 0 0 6 0V3h4v9a7 7 0 0 1-14 0z"/><path d="M5 7h4M15 7h4"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.7-1.5"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.6v14.8a1 1 0 0 0 1.5.86l12.3-7.4a1 1 0 0 0 0-1.72L8.5 3.74A1 1 0 0 0 7 4.6z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6" y="4" width="4" height="16" rx="1.4"/><rect fill="currentColor" x="14" y="4" width="4" height="16" rx="1.4"/></symbol>
     <symbol id="i-prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon fill="currentColor" points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></symbol>
@@ -316,18 +324,11 @@
           </aside>
         </div>
         <div class="ed-toolbar">
-          <div class="seg-tools">
-            <button data-edtool="select" class="icon sm on" title="Выбор и перемещение (V)"><svg class="i"><use href="#i-move"/></svg></button>
-            <button data-edtool="razor" class="icon sm" title="Бритва — нажмите на клип, чтобы разрезать (C)"><svg class="i"><use href="#i-scissors"/></svg></button>
-          </div>
           <button id="ed-split" class="btn small" title="Разрезать по линии времени (S)">Разрезать</button>
           <button id="ed-del" class="btn small" title="Удалить выбранное (Delete)">Удалить</button>
-          <button id="ed-text" class="btn small" title="Добавить надпись (T)"><svg class="i"><use href="#i-type"/></svg>Текст</button>
           <button id="ed-undo" class="icon sm" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
           <button id="ed-redo" class="icon sm flip" title="Повторить (Ctrl+Shift+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
-          <label class="ed-check" title="Клипы прилипают к краям других клипов и к линии времени"><input type="checkbox" id="ed-snap" checked>Привязка</label>
           <span class="ed-flex"></span>
-          <label class="ed-zoom" title="Масштаб таймлайна (Ctrl + колесо)">Масштаб<input type="range" id="ed-zoom" min="0" max="100" value="40"></label>
           <select id="ed-res" class="chip" title="Размер кадра готового ролика">
             <option value="1920x1080">1920×1080</option>
             <option value="1280x720">1280×720</option>
@@ -345,13 +346,35 @@
           <button id="ed-export" class="btn small accent"><svg class="i"><use href="#i-scissors"/></svg>Экспорт…</button>
         </div>
         <div class="ed-timeline">
-          <div id="ed-heads"></div>
-          <div id="ed-scroll">
-            <div id="ed-canvas">
-              <div id="ed-ruler"></div>
-              <div id="ed-lanes"></div>
-              <div id="ed-playhead"><i></i></div>
-              <div id="ed-snapline" hidden></div>
+          <div class="ed-tools">
+            <button data-edtool="select" class="on" title="Выделение (V)"><svg class="i"><use href="#i-pointer"/></svg></button>
+            <button data-edtool="track" title="Выделить всё дальше по времени (A); с Shift — только на этой дорожке"><svg class="i"><use href="#i-track-fwd"/></svg></button>
+            <button data-edtool="razor" title="Бритва — нажмите на клип, чтобы разрезать (C)"><svg class="i"><use href="#i-razor"/></svg></button>
+            <button data-edtool="hand" title="Рука — двигать таймлайн (H)"><svg class="i"><use href="#i-hand"/></svg></button>
+            <button id="ed-text" title="Текст — добавить надпись (T)"><svg class="i"><use href="#i-type"/></svg></button>
+          </div>
+          <div class="ed-tl">
+            <div class="ed-tl-head">
+              <input id="ed-tc" spellcheck="false" title="Время линии — можно ввести своё, например 01:30:00 или 90" value="00:00:00:00">
+              <div class="ed-toggles">
+                <button id="ed-snap" class="on" title="Привязка: клипы прилипают к краям, меткам и линии времени"><svg class="i"><use href="#i-magnet"/></svg></button>
+                <button id="ed-linked" class="on" title="Связанное перемещение: картинка и звук одного файла двигаются вместе"><svg class="i"><use href="#i-link"/></svg></button>
+                <button id="ed-marker" title="Добавить метку (M)"><svg class="i"><use href="#i-bookmark"/></svg></button>
+              </div>
+            </div>
+            <div class="ed-tl-body">
+              <div id="ed-heads"></div>
+              <div id="ed-scroll">
+                <div id="ed-canvas">
+                  <div id="ed-ruler"></div>
+                  <div id="ed-lanes"></div>
+                  <div id="ed-playhead"><i></i></div>
+                  <div id="ed-snapline" hidden></div>
+                </div>
+              </div>
+            </div>
+            <div class="ed-zoombar" title="Тяните полосу — прокрутка, её края — масштаб">
+              <div id="ed-zoomthumb"><i class="l"></i><i class="r"></i></div>
             </div>
           </div>
         </div>

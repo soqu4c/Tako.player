@@ -1675,6 +1675,12 @@ $('.ed-split').addEventListener('pointerdown', e => {
 });
 new ResizeObserver(() => renderRuler()).observe(scroller);
 // track names follow the lanes when the timeline scrolls up and down
+// The wheel over the track names scrolls the tracks too (that column has no scrollbar)
+$('#ed-heads').addEventListener('wheel', e => {
+  if (e.ctrlKey) return;
+  e.preventDefault();
+  scroller.scrollTop += e.deltaY;
+}, { passive: false });
 scroller.addEventListener('scroll', () => {
   $('#ed-heads').scrollTop = scroller.scrollTop;
   renderRuler();

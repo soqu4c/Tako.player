@@ -204,6 +204,9 @@ function releaseStartup() {
 const STARTUP_CHECK_MS = 6000;
 
 function setupUpdates(openedFiles) {
+  // the beta is installed by hand and never updates itself (it would turn into the main player)
+  return releaseStartup();
+  /* eslint-disable no-unreachable */
   if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;

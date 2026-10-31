@@ -2438,9 +2438,14 @@ api.startupGate().catch(() => {}).then(() => {
 // After an update the notes of the new version (and of any skipped ones) open once; they can
 // be read again from the start screen and from Settings → About.
 
+// 1.4.0-beta.2 is newer than 1.4.0-beta.1, and the main 1.4.0 is newer than its betas
+const verParts = v => {
+  const [main, pre] = v.split('-');
+  return [...main.split('.').map(Number), pre ? parseInt(pre.split('.')[1], 10) || 0 : Infinity];
+};
 const newerThan = (a, b) => {
-  const x = a.split('.').map(Number), y = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  const x = verParts(a), y = verParts(b);
+  for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
   return false;
 };
 const tr = pair => pair[I18N_LANG === 'en' ? 1 : 0];

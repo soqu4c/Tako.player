@@ -329,6 +329,7 @@ function renderHeads() {
         store('edProject', ed.p);
         syncPreview(true);
       };
+      vol.ondblclick = () => pct.ondblclick();
       pct.ondblclick = () => { edCommit(); st.volume = 1; vol.value = 1; paint(); store('edProject', ed.p); syncPreview(true); };
       wrap.append(vol, pct);
       h.append(wrap);
@@ -2242,3 +2243,13 @@ function showKeysTab(name) {
 for (const b of document.querySelectorAll('.keys-tabs button')) b.onclick = () => showKeysTab(b.dataset.keys);
 new MutationObserver(() => { if ($('#help-dlg').open) showKeysTab(currentView === 'editor' ? 'editor' : 'player'); })
   .observe($('#help-dlg'), { attributes: true, attributeFilter: ['open'] });
+
+// Double click on a clip's loudness line puts it back to 100%
+lanesBox.addEventListener('dblclick', e => {
+  if (!e.target.classList.contains('ed-vol')) return;
+  const c = ed.p.clips.find(x => x.id === Number(e.target.closest('.ed-clip').dataset.id));
+  if (!c) return;
+  edCommit();
+  c.volume = 1;
+  edChanged();
+});

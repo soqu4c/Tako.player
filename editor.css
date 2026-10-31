@@ -18,7 +18,7 @@
 .ed {
   --head-w: 132px;
   --lane-h: 54px;
-  --lane-min: 32px;
+  --lane-min: 40px;
   position: absolute;
   inset: 0;
   display: grid;
@@ -511,7 +511,7 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .ed.mini-tracks .ed-clip { top: 2px; bottom: 2px; border-radius: 4px; }
 .ed.mini-tracks .ed-clip:not(.audio) { background: var(--cc) !important; }
 .ed.mini-tracks .ed-clip.audio { background: linear-gradient(var(--cc) 0 12px, color-mix(in srgb, var(--cc) 62%, #0b0c10) 12px) !important; }
-.ed.mini-tracks .ed-wave { height: calc(100% - 13px); bottom: 1px; }
+.ed.mini-tracks .ed-wave { height: calc(100% - 13px); bottom: 1px; filter: brightness(0) invert(1); opacity: .55; }
 .ed.mini-tracks .ed-name { top: 0; font-size: 10px; line-height: 12px; }
 .ed.mini-tracks .ed-trhead { font-size: 11px; }
 .ed.mini-tracks .ed-trhead input[type=range] { display: none; }

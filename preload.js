@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('api', {
   startupGate: () => ipcRenderer.invoke('startup-gate'),
   startupSkip: () => ipcRenderer.invoke('startup-skip'),
   openProject: () => ipcRenderer.invoke('open-project'),
+  reportBug: info => ipcRenderer.invoke('report-bug', info),
   openDonate: () => ipcRenderer.invoke('open-donate'),
   discordActivity: data => ipcRenderer.send('discord-activity', data),
   pickSubtitle: () => ipcRenderer.invoke('pick-subtitle'),

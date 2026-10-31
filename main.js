@@ -425,6 +425,20 @@ ipcMain.handle('open-folder', async () => {
 
 ipcMain.handle('expand-paths', (_e, paths) => expandPaths(paths));
 
+// Media files next to `file` (same folder, no subfolders), in natural name order
+ipcMain.handle('folder-media', (_e, file) => {
+  const dir = path.dirname(file);
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter(e => e.isFile() && MEDIA_EXT.includes(extOf(e.name)))
+      .map(e => e.name)
+      .sort(collator.compare)
+      .map(name => path.join(dir, name));
+  } catch {
+    return [file];
+  }
+});
+
 ipcMain.handle('pick-subtitle', async () => {
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],

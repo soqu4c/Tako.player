@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   openFiles: () => ipcRenderer.invoke('open-files'),
   openFolder: () => ipcRenderer.invoke('open-folder'),
   expandPaths: paths => ipcRenderer.invoke('expand-paths', paths),
+  folderMedia: file => ipcRenderer.invoke('folder-media', file),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   libraryScan: folders => ipcRenderer.invoke('library-scan', folders),
   libraryThumb: file => ipcRenderer.invoke('library-thumb', file),

@@ -433,13 +433,13 @@ body.audio-only #audio-art { display: flex; }
 
 #controls {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  padding: 6px 14px 10px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  padding: 3px 12px 6px;
   background: var(--glass);
   border: 1px solid var(--line-2);
-  border-radius: 20px;
+  border-radius: 16px;
   backdrop-filter: blur(22px) saturate(1.5);
   box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .7);
   z-index: 4;
@@ -449,9 +449,41 @@ body.idle #controls, body:not(.loaded) #controls { opacity: 0; transform: transl
 #controls { container-type: inline-size; }
 .row.main > .group:first-child { flex: none; }
 @container (max-width: 960px) {
-  #btn-frame-back, #btn-frame-fwd, #btn-names { display: none; }
+  #btn-names { display: none; }
   .pick { flex-basis: 150px; }
 }
+
+/* compact controls */
+#controls button.icon { width: 32px; height: 32px; }
+#controls button.icon .i { width: 18px; height: 18px; }
+#controls button.icon.sm { width: 28px; height: 28px; }
+#controls button.icon.sm .i { width: 16px; height: 16px; }
+#controls button.play { width: 38px; height: 38px; margin: 0 2px; }
+#controls button.play .i { width: 16px; height: 16px; }
+#controls select { padding: 4px 24px 4px 9px; font-size: 12px; background-position: right 8px center; }
+#controls .pick .i { width: 16px; height: 16px; }
+
+.skip { position: relative; }
+.skip-n { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -42%); font-size: 7.5px; font-weight: 800; line-height: 1; pointer-events: none; }
+
+/* the panel folds down to just the timeline */
+.collapse {
+  position: absolute;
+  right: 16px;
+  top: -11px;
+  width: 30px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  z-index: 2;
+}
+.collapse .i { width: 14px; height: 14px; transition: transform .3s var(--ease); }
+.collapse:hover { color: #fff; background: var(--surface-3); }
+body.ctl-mini .collapse .i { transform: rotate(180deg); }
+body.ctl-mini .row.main { display: none; }
+body.ctl-mini #controls { padding: 2px 12px 3px; }
 @container (max-width: 800px) {
   #speed, .divider { display: none; }
   .pick { min-width: 64px; }
@@ -557,7 +589,8 @@ body.loaded #timeline:hover #handle { transform: scale(1); }
 .group.right { flex-shrink: 1; justify-content: flex-end; }
 .divider { width: 1px; height: 22px; background: var(--line-2); margin: 0 6px; }
 
-#time { margin-left: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--soft); font-size: 12.5px; }
+#time { margin-left: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--soft); font-size: 12px; cursor: pointer; padding: 3px 6px; border-radius: 6px; transition: background .15s, color .15s; }
+#time:hover { background: rgba(255, 255, 255, .07); color: #fff; }
 
 .pick { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); margin-left: 6px; flex: 0 1 180px; min-width: 80px; }
 .pick select { width: 100%; max-width: none; min-width: 0; text-overflow: ellipsis; border-radius: 999px; background-color: rgba(255, 255, 255, .06); border-color: transparent; }

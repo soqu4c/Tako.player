@@ -39,6 +39,10 @@
     <symbol id="i-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.4 2.5.2.3.6.3.8 0 .8-1.4 2.3-2.5 4.4-2.5 3.7 0 5.8 3.9 4.3 7.3C18.5 16.4 12 21 12 21z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3l7 17 2.5-7.5L21 10z"/></symbol>
     <symbol id="i-brush" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></symbol>
     <symbol id="i-marker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h9l3-3"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></symbol>
@@ -111,6 +115,7 @@
         </div>
 
         <div id="controls">
+          <button id="btn-collapse" class="collapse" title="Свернуть панель до полосы времени (H)"><svg class="i"><use href="#i-chevron"/></svg></button>
           <div id="timeline">
             <div class="rail"><div id="sel" hidden></div><div id="hover-fill"></div><div id="played"></div></div>
             <div id="handle"></div>
@@ -124,13 +129,13 @@
               <button id="btn-prev" class="icon" title="Предыдущий файл (PageUp)"><svg class="i"><use href="#i-prev"/></svg></button>
               <button id="btn-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="play-icon" href="#i-play"/></svg></button>
               <button id="btn-next" class="icon" title="Следующий файл (PageDown)"><svg class="i"><use href="#i-next"/></svg></button>
-              <button id="btn-frame-back" class="icon sm" title="Кадр назад ( , )"><svg class="i"><use href="#i-left"/></svg></button>
-              <button id="btn-frame-fwd" class="icon sm" title="Кадр вперёд ( . )"><svg class="i"><use href="#i-right"/></svg></button>
+              <button id="btn-back" class="icon skip" title="Назад (←)"><svg class="i"><use href="#i-back"/></svg><span class="skip-n"></span></button>
+              <button id="btn-fwd" class="icon skip" title="Вперёд (→)"><svg class="i"><use href="#i-fwd"/></svg><span class="skip-n"></span></button>
               <div class="vol">
                 <button id="btn-mute" class="icon" title="Без звука (M)"><svg class="i"><use id="mute-icon" href="#i-vol"/></svg></button>
                 <input type="range" id="volume" min="0" max="1" step="0.01" value="1" title="Громкость (↑ ↓)">
               </div>
-              <span id="time">0:00 / 0:00</span>
+              <span id="time" title="Нажмите, чтобы показать миллисекунды">0:00 / 0:00</span>
             </div>
             <div class="group right">
               <label class="pick" title="Аудиодорожка (A)"><svg class="i"><use href="#i-audio"/></svg><select id="audio-select"><option>—</option></select></label>
@@ -173,6 +178,9 @@
                     <button class="icon xs nudge" data-p="out" data-d="1" title="На кадр позже (Shift — на секунду)">›</button>
                   </div>
                   <span id="sel-len"></span>
+                  <span class="divider"></span>
+                  <button id="btn-frame-back" class="icon sm" title="Кадр назад ( , )"><svg class="i"><use href="#i-left"/></svg></button>
+                  <button id="btn-frame-fwd" class="icon sm" title="Кадр вперёд ( . )"><svg class="i"><use href="#i-right"/></svg></button>
                 </div>
                 <div class="group">
                   <button id="btn-play-sel" class="icon sm" title="Проиграть фрагмент (P)"><svg class="i"><use href="#i-play-sel"/></svg></button>
@@ -188,6 +196,7 @@
 
         <div id="draw-bar" hidden>
           <div class="draw-group" id="draw-tools">
+            <button data-tool="move" class="icon sm" title="Выбор — нажмите на линию или текст и тащите; Delete удаляет (V)"><svg class="i"><use href="#i-move"/></svg></button>
             <button data-tool="pen" class="icon sm" title="Кисть (B)"><svg class="i"><use href="#i-brush"/></svg></button>
             <button data-tool="marker" class="icon sm" title="Маркер — полупрозрачный, чтобы выделять (H)"><svg class="i"><use href="#i-marker"/></svg></button>
             <button data-tool="arrow" class="icon sm" title="Стрелка (A)"><svg class="i"><use href="#i-arrow"/></svg></button>
@@ -203,7 +212,7 @@
           <div class="draw-group">
             <button id="draw-undo" class="icon sm" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
             <button id="draw-redo" class="icon sm" title="Повторить (Ctrl+Y)"><svg class="i"><use href="#i-redo"/></svg></button>
-            <button id="draw-clear" class="icon sm" title="Стереть всё (Delete)"><svg class="i"><use href="#i-trash"/></svg></button>
+            <button id="draw-clear" class="icon sm" title="Стереть всё"><svg class="i"><use href="#i-trash"/></svg></button>
           </div>
           <span class="divider"></span>
           <div class="draw-group">
@@ -363,7 +372,7 @@
   <h2>Горячие клавиши</h2>
   <table class="keys">
     <tr><td><kbd>Пробел</kbd> <kbd>K</kbd></td><td>Воспроизведение / пауза</td></tr>
-    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Перемотка (шаг — в настройках; Shift — 1 с, Ctrl — 30 с)</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Перемотка, как кнопки ⟲ ⟳ (шаг — в настройках; Shift — 1 с, Ctrl — 30 с)</td></tr>
     <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Кадр назад / вперёд</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd>, колесо</td><td>Громкость</td></tr>
     <tr><td><kbd>M</kbd></td><td>Без звука</td></tr>
@@ -375,11 +384,12 @@
     <tr><td><kbd>P</kbd></td><td>Проиграть фрагмент</td></tr>
     <tr><td><kbd>L</kbd></td><td>Повтор</td></tr>
     <tr><td><kbd>X</kbd></td><td>Закрыть обрезку и сбросить выделение</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td>Выйти из полного экрана → закрыть обрезку → закрыть видео</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Выйти из полного экрана → закрыть обрезку → закрыть видео и перейти в библиотеку</td></tr>
     <tr><td><kbd>C</kbd></td><td>Сохранить кадр</td></tr>
-    <tr><td><kbd>D</kbd></td><td>Рисовать на кадре: <kbd>B</kbd> кисть, <kbd>H</kbd> маркер, <kbd>A</kbd> стрелка, <kbd>R</kbd> рамка, <kbd>E</kbd> овал, <kbd>T</kbd> текст, <kbd>1</kbd>–<kbd>3</kbd> толщина, <kbd>Ctrl+Z</kbd> отменить, <kbd>Ctrl+C</kbd> копировать, <kbd>Ctrl+S</kbd> сохранить</td></tr>
+    <tr><td><kbd>H</kbd></td><td>Свернуть / развернуть панель управления</td></tr>
+    <tr><td><kbd>D</kbd></td><td>Рисовать на кадре: <kbd>V</kbd> выбор и перемещение, <kbd>B</kbd> кисть, <kbd>H</kbd> маркер, <kbd>A</kbd> стрелка, <kbd>R</kbd> рамка, <kbd>E</kbd> овал, <kbd>T</kbd> текст, <kbd>1</kbd>–<kbd>3</kbd> толщина, <kbd>Ctrl+Z</kbd> отменить, <kbd>Ctrl+C</kbd> копировать, <kbd>Ctrl+S</kbd> сохранить</td></tr>
     <tr><td><kbd>F</kbd>, двойной клик</td><td>Полный экран</td></tr>
-    <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл в открытой папке</td></tr>
+    <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл в той же папке</td></tr>
     <tr><td><kbd>Ctrl+O</kbd></td><td>Открыть файлы</td></tr>
     <tr><td><kbd>Ctrl+Shift+O</kbd></td><td>Открыть папку (вместе с вложенными)</td></tr>
     <tr><td><kbd>Ctrl+L</kbd></td><td>Библиотека / плеер</td></tr>

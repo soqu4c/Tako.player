@@ -178,21 +178,36 @@ api.onProgress(({ jobId, value }) => {
 
 const SUB_RE = /\.(srt|vtt|ass|ssa)$/i;
 
-// Opening media replaces what was open: one file, or every file of an opened folder,
-// which ⏮ ⏭ then step through. Subtitle files attach to the video already playing.
-function addFiles(paths) {
+// Opening media replaces what was open. Several files (or a folder) become the list ⏮ ⏭ step
+// through; a single file brings its folder neighbours along, so ⏮ ⏭ work for it too.
+// Subtitle files attach to the video already playing.
+async function addFiles(paths) {
   const subs = paths.filter(p => SUB_RE.test(p));
   const seen = new Set();
   const media = paths.filter(p => !SUB_RE.test(p) && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
-  if (media.length) {
-    state.playlist = media.map(p => ({ path: p, name: api.basename(p) }));
-    state.current = -1;
-    renderPlaylist();
-    loadIndex(0);
-    if (media.length > 1) osd(`Открыто файлов: ${media.length}`);
-  } else if (subs.length && state.info) {
-    loadExternalSub(subs[0]);
+  if (!media.length) {
+    if (subs.length && state.info) loadExternalSub(subs[0]);
+    return;
   }
+  let list = media;
+  let start = 0;
+  if (media.length === 1) {
+    const around = await api.folderMedia(media[0]).catch(() => []);
+    const i = around.findIndex(p => p.toLowerCase() === media[0].toLowerCase());
+    if (i >= 0) {
+      list = around;
+      start = i;
+    }
+  }
+  playList(list, start);
+  if (media.length > 1) osd(`Открыто файлов: ${media.length}`);
+}
+
+function playList(paths, start) {
+  state.playlist = paths.map(p => ({ path: p, name: api.basename(p) }));
+  state.current = -1;
+  renderPlaylist();
+  loadIndex(start);
 }
 
 // Only the ⏮ ⏭ buttons depend on the list now
@@ -962,7 +977,8 @@ function updateProgress() {
   $('#played').style.width = pct + '%';
   $('#handle').style.left = pct + '%';
   $('#strip-head').style.left = pct + '%';
-  $('#time').textContent = state.info ? `${fmt(t)} / ${fmt(d)}` : '0:00 / 0:00';
+  const f = state.precise ? fmtPrecise : fmt;
+  $('#time').textContent = state.info ? `${f(t)} / ${fmt(d)}` : '0:00 / 0:00';
 }
 
 // ---------- trimming
@@ -1374,6 +1390,14 @@ $('#btn-open-folder-big').onclick = openFolder;
 $('#btn-play').onclick = togglePlay;
 $('#btn-prev').onclick = () => loadIndex(state.current - 1);
 $('#btn-next').onclick = () => loadIndex(state.current + 1);
+$('#btn-back').onclick = () => seekBy(-settings.seekStep);
+$('#btn-fwd').onclick = () => seekBy(settings.seekStep);
+// Clicking the time switches to milliseconds and back
+$('#time').onclick = () => {
+  state.precise = !state.precise;
+  store('timePrecise', state.precise);
+  updateProgress();
+};
 $('#btn-frame-back').onclick = () => stepFrame(-1);
 $('#btn-frame-fwd').onclick = () => stepFrame(1);
 $('#btn-mute').onclick = toggleMute;
@@ -1453,8 +1477,16 @@ document.addEventListener('keydown', e => {
     KeyP: playSelection,
     KeyL: toggleLoop,
     KeyX: () => setTrimOpen(false),
-    // In fullscreen Esc only leaves fullscreen; then it closes trimming, then the video
-    Escape: () => (document.fullscreenElement ? document.exitFullscreen() : trimOpen() ? setTrimOpen(false) : closeVideo()),
+    // In fullscreen Esc only leaves fullscreen; then it closes trimming, then the video (to the library)
+    Escape: () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (trimOpen()) setTrimOpen(false);
+      else {
+        closeVideo();
+        showView('library');
+      }
+    },
+    KeyH: toggleCollapse,
     KeyC: screenshot,
     KeyT: toggleTrim,
     KeyD: toggleDraw,
@@ -1479,6 +1511,7 @@ document.addEventListener('keydown', e => {
 
 // ---------- init
 
+state.precise = !!recall('timePrecise', false);
 state.volume = clamp(Number(recall('volume', 1)) || 0, 0, 1);
 state.muted = !!recall('muted', false);
 applyVolume();

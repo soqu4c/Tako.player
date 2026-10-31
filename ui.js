@@ -50,6 +50,10 @@ function applySettings() {
   root.setProperty('--sub-color', settings.subColor);
   root.setProperty('--sub-bg', SUB_BGS[settings.subBg] || SUB_BGS.soft);
   document.body.classList.toggle('no-motion', !settings.motion);
+  // The skip buttons show the step they jump by
+  for (const el of document.querySelectorAll('.skip-n')) el.textContent = settings.seekStep;
+  $('#btn-back').title = `Назад на ${settings.seekStep} с (←)`;
+  $('#btn-fwd').title = `Вперёд на ${settings.seekStep} с (→)`;
 }
 
 function setSetting(key, value) {
@@ -316,6 +320,19 @@ document.addEventListener('mousemove', poke);
 document.addEventListener('keydown', poke);
 $('#controls').addEventListener('mouseenter', () => { overControls = true; poke(); });
 $('#controls').addEventListener('mouseleave', () => { overControls = false; poke(); });
+
+// The control panel can shrink to just the timeline
+function setCollapsed(on) {
+  document.body.classList.toggle('ctl-mini', on);
+  store('ctlMini', on);
+  $('#btn-collapse').title = on ? 'Развернуть панель (H)' : 'Свернуть панель до полосы времени (H)';
+}
+
+function toggleCollapse() {
+  setCollapsed(!document.body.classList.contains('ctl-mini'));
+  poke();
+}
+$('#btn-collapse').onclick = toggleCollapse;
 
 // ---------- trimming: panel with a film strip
 //
@@ -746,12 +763,10 @@ const SORTS = {
   size: (a, b) => b.size - a.size,
 };
 
+// A library card plays its file; ⏮ ⏭ then go through the folder as it is shown
 function playFrom(files, i) {
-  state.playlist = files.map(f => ({ path: f.path, name: f.name }));
-  state.current = -1;
-  renderPlaylist();
   showView('player');
-  loadIndex(i);
+  playList(files.map(f => f.path), i);
 }
 
 function renderLibrary() {
@@ -790,13 +805,7 @@ function renderLibrary() {
       lib.data = lib.data.filter(s => s !== sec);
       renderLibrary();
     };
-    const all = document.createElement('button');
-    all.className = 'btn small';
-    all.title = 'Смотреть все файлы этой папки подряд';
-    all.innerHTML = '<svg class="i"><use href="#i-play"/></svg>Играть всё';
-    all.onclick = () => playFrom(files, 0);
-    all.hidden = !files.length;
-    head.append(h, count, where, all, rm);
+    head.append(h, count, where, rm);
 
     const grid = document.createElement('div');
     grid.className = 'cards';
@@ -805,7 +814,7 @@ function renderLibrary() {
       const rel = f.path.slice(sec.dir.length).replace(/^[\\/]+/, '');
       const sub = rel.includes('\\') ? rel.slice(0, rel.lastIndexOf('\\')) + ' · ' : '';
       const meta = `${sub}${fmtSize(f.size)} · ${new Date(f.mtime).toLocaleDateString('ru-RU')}`;
-      grid.append(makeCard(f, meta, () => addFiles([f.path]), i));
+      grid.append(makeCard(f, meta, () => playFrom(files, i), i));
     });
     if (!files.length) {
       const none = document.createElement('div');
@@ -880,7 +889,58 @@ const DRAW_FONTS = [0.035, 0.05, 0.075];
 const dCanvas = $('#draw-canvas');
 const dctx = dCanvas.getContext('2d');
 const dText = $('#draw-text');
-const draw = { on: false, tool: 'pen', color: DRAW_COLORS[0], size: 1, shapes: [], past: [], future: [], cur: null };
+const draw = { on: false, tool: 'pen', color: DRAW_COLORS[0], size: 1, shapes: [], past: [], future: [], cur: null, sel: -1, drag: null };
+
+// ---- picking shapes for the "move" tool
+
+function shapeBox(s) {
+  if (s.tool === 'text') {
+    dctx.save();
+    dctx.font = `700 ${s.font}px "Segoe UI", sans-serif`;
+    const w = dctx.measureText(s.text).width;
+    dctx.restore();
+    return { x1: s.x, y1: s.y, x2: s.x + w, y2: s.y + s.font * 1.2 };
+  }
+  const pad = s.width / 2;
+  const xs = s.points ? s.points.map(p => p[0]) : [s.x1, s.x2];
+  const ys = s.points ? s.points.map(p => p[1]) : [s.y1, s.y2];
+  return { x1: Math.min(...xs) - pad, y1: Math.min(...ys) - pad, x2: Math.max(...xs) + pad, y2: Math.max(...ys) + pad };
+}
+
+function segDist(px, py, ax, ay, bx, by) {
+  const l2 = (bx - ax) ** 2 + (by - ay) ** 2;
+  const t = l2 ? clamp(((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / l2, 0, 1) : 0;
+  return Math.hypot(px - (ax + t * (bx - ax)), py - (ay + t * (by - ay)));
+}
+
+// Lines are picked near the stroke; frames, ovals and text anywhere inside their box
+function hitShape(s, x, y) {
+  const tol = dCanvas.height * 0.012;
+  if (s.points) {
+    const p = s.points;
+    if (p.length === 1) return Math.hypot(x - p[0][0], y - p[0][1]) <= s.width / 2 + tol;
+    for (let i = 1; i < p.length; i++) {
+      if (segDist(x, y, p[i - 1][0], p[i - 1][1], p[i][0], p[i][1]) <= s.width / 2 + tol) return true;
+    }
+    return false;
+  }
+  if (s.tool === 'arrow') return segDist(x, y, s.x1, s.y1, s.x2, s.y2) <= s.width / 2 + tol;
+  const b = shapeBox(s);
+  return x >= b.x1 - tol && x <= b.x2 + tol && y >= b.y1 - tol && y <= b.y2 + tol;
+}
+
+function shapeAt(x, y) {
+  for (let i = draw.shapes.length - 1; i >= 0; i--) {
+    if (hitShape(draw.shapes[i], x, y)) return i;
+  }
+  return -1;
+}
+
+function shifted(s, dx, dy) {
+  if (s.points) return { ...s, points: s.points.map(([a, b]) => [a + dx, b + dy]) };
+  if (s.tool === 'text') return { ...s, x: s.x + dx, y: s.y + dy };
+  return { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
+}
 
 function paintShape(ctx, s, k) {
   ctx.save();
@@ -929,8 +989,26 @@ function paintShape(ctx, s, k) {
 
 function renderDrawing() {
   dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
-  for (const s of draw.shapes) paintShape(dctx, s, 1);
+  // A text being edited is shown only in its input box
+  const editing = dText.hidden ? -1 : Number(dText.dataset.edit);
+  draw.shapes.forEach((s, i) => { if (i !== editing) paintShape(dctx, s, 1); });
   if (draw.cur) paintShape(dctx, draw.cur, 1);
+  // Dashed box around the picked shape (only on screen, never in the saved picture)
+  const picked = draw.tool === 'move' && draw.shapes[draw.sel];
+  if (picked) {
+    const b = shapeBox(picked);
+    const lw = Math.max(1, dCanvas.height * 0.0022);
+    const pad = lw * 3;
+    dctx.save();
+    dctx.lineWidth = lw;
+    dctx.setLineDash([lw * 4, lw * 3]);
+    dctx.strokeStyle = 'rgba(0, 0, 0, .6)';
+    dctx.strokeRect(b.x1 - pad, b.y1 - pad, b.x2 - b.x1 + pad * 2, b.y2 - b.y1 + pad * 2);
+    dctx.lineDashOffset = lw * 3.5;
+    dctx.strokeStyle = '#fff';
+    dctx.strokeRect(b.x1 - pad, b.y1 - pad, b.x2 - b.x1 + pad * 2, b.y2 - b.y1 + pad * 2);
+    dctx.restore();
+  }
   $('#draw-undo').disabled = !draw.past.length;
   $('#draw-redo').disabled = !draw.future.length;
   $('#draw-clear').disabled = $('#draw-copy').disabled = $('#draw-save').disabled = !draw.shapes.length;
@@ -941,6 +1019,7 @@ function changeShapes(next) {
   draw.past.push(draw.shapes);
   draw.future = [];
   draw.shapes = next;
+  draw.sel = -1;
   renderDrawing();
 }
 
@@ -948,6 +1027,7 @@ function undoDraw() {
   if (!draw.past.length) return;
   draw.future.push(draw.shapes);
   draw.shapes = draw.past.pop();
+  draw.sel = -1;
   renderDrawing();
 }
 
@@ -955,7 +1035,13 @@ function redoDraw() {
   if (!draw.future.length) return;
   draw.past.push(draw.shapes);
   draw.shapes = draw.future.pop();
+  draw.sel = -1;
   renderDrawing();
+}
+
+// Delete removes only the picked shape; wiping everything is left to the trash button
+function deleteDrawing() {
+  if (draw.tool === 'move' && draw.shapes[draw.sel]) changeShapes(draw.shapes.filter((_, i) => i !== draw.sel));
 }
 
 // The canvas has the video's own size and is laid over the picture where object-fit put it
@@ -984,7 +1070,10 @@ function syncDrawBar() {
 function setDrawTool(tool) {
   commitText();
   draw.tool = tool;
+  draw.sel = -1;
+  dCanvas.style.cursor = '';
   syncDrawBar();
+  renderDrawing();
 }
 
 DRAW_COLORS.forEach(c => {
@@ -1018,6 +1107,16 @@ for (const b of $('#draw-tools').children) b.onclick = () => setDrawTool(b.datas
 dCanvas.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const [x, y] = canvasPoint(e);
+  if (draw.tool === 'move') {
+    commitText();
+    draw.sel = shapeAt(x, y);
+    if (draw.sel >= 0) {
+      dCanvas.setPointerCapture(e.pointerId);
+      draw.drag = { x, y, before: draw.shapes, orig: draw.shapes[draw.sel], moved: false };
+    }
+    renderDrawing();
+    return;
+  }
   if (draw.tool === 'text') {
     e.preventDefault();
     startText(x, y);
@@ -1031,13 +1130,36 @@ dCanvas.addEventListener('pointerdown', e => {
   renderDrawing();
 });
 dCanvas.addEventListener('pointermove', e => {
-  if (!draw.cur) return;
   const [x, y] = canvasPoint(e);
+  if (draw.drag) {
+    // Moved from the original each time, so the shape never drifts from the pointer
+    const d = draw.drag;
+    d.moved = true;
+    draw.shapes = d.before.slice();
+    draw.shapes[draw.sel] = shifted(d.orig, x - d.x, y - d.y);
+    renderDrawing();
+    return;
+  }
+  if (draw.tool === 'move') dCanvas.style.cursor = shapeAt(x, y) >= 0 ? 'move' : 'default';
+  if (!draw.cur) return;
   if (draw.cur.points) draw.cur.points.push([x, y]);
   else Object.assign(draw.cur, { x2: x, y2: y });
   renderDrawing();
 });
 const endStroke = () => {
+  const d = draw.drag;
+  if (d) {
+    // A finished move becomes one undo step; a click without moving changes nothing
+    draw.drag = null;
+    if (d.moved) {
+      draw.past.push(d.before);
+      draw.future = [];
+    } else {
+      draw.shapes = d.before;
+    }
+    renderDrawing();
+    return;
+  }
   const s = draw.cur;
   if (!s) return;
   draw.cur = null;
@@ -1048,32 +1170,55 @@ const endStroke = () => {
 dCanvas.addEventListener('pointerup', endStroke);
 dCanvas.addEventListener('pointercancel', endStroke);
 
-function startText(x, y) {
+// `edit` is the index of an existing text being changed (double-click with the move tool)
+function startText(x, y, edit = -1) {
   commitText();
+  const old = draw.shapes[edit];
   const r = dCanvas.getBoundingClientRect();
   const layer = $('#draw-layer').getBoundingClientRect();
   const k = r.width / dCanvas.width;
-  const font = dCanvas.height * DRAW_FONTS[draw.size];
-  Object.assign(dText.dataset, { x, y, font, color: draw.color });
+  const font = old ? old.font : dCanvas.height * DRAW_FONTS[draw.size];
+  const color = old ? old.color : draw.color;
+  Object.assign(dText.dataset, { x, y, font, color, edit });
   Object.assign(dText.style, {
     left: r.left - layer.left + x * k + 'px',
     top: r.top - layer.top + y * k + 'px',
     fontSize: font * k + 'px',
-    color: draw.color,
+    color,
   });
-  dText.value = '';
+  dText.value = old ? old.text : '';
   dText.hidden = false;
-  setTimeout(() => dText.focus());
+  renderDrawing();
+  setTimeout(() => {
+    dText.focus();
+    dText.select();
+  });
 }
 
 function commitText() {
   if (dText.hidden) return;
   const text = dText.value.trim();
   dText.hidden = true;
-  if (!text) return;
   const d = dText.dataset;
-  changeShapes([...draw.shapes, { tool: 'text', color: d.color, x: Number(d.x), y: Number(d.y), font: Number(d.font), text }]);
+  const edit = Number(d.edit);
+  const shape = { tool: 'text', color: d.color, x: Number(d.x), y: Number(d.y), font: Number(d.font), text };
+  if (edit >= 0 && draw.shapes[edit]) {
+    if (text !== draw.shapes[edit].text) changeShapes(text ? draw.shapes.map((s, i) => (i === edit ? shape : s)) : draw.shapes.filter((_, i) => i !== edit));
+    else renderDrawing();
+  } else if (text) {
+    changeShapes([...draw.shapes, shape]);
+  }
 }
+
+dCanvas.addEventListener('dblclick', e => {
+  if (draw.tool !== 'move') return;
+  const i = shapeAt(...canvasPoint(e));
+  const s = draw.shapes[i];
+  if (s && s.tool === 'text') {
+    draw.sel = -1;
+    startText(s.x, s.y, i);
+  }
+});
 dText.addEventListener('keydown', e => {
   e.stopPropagation();
   if (e.key === 'Enter') commitText();
@@ -1091,6 +1236,8 @@ function openDraw() {
   draw.shapes = [];
   draw.past = [];
   draw.future = [];
+  draw.sel = -1;
+  draw.drag = null;
   dCanvas.width = video.videoWidth;
   dCanvas.height = video.videoHeight;
   document.body.classList.add('drawing');
@@ -1169,7 +1316,7 @@ loadIndex = (...args) => {
 };
 
 // While drawing, keys belong to the drawing tools, not to the player
-const DRAW_KEYS = { KeyB: 'pen', KeyH: 'marker', KeyA: 'arrow', KeyR: 'rect', KeyE: 'ellipse', KeyT: 'text' };
+const DRAW_KEYS = { KeyV: 'move', KeyB: 'pen', KeyH: 'marker', KeyA: 'arrow', KeyR: 'rect', KeyE: 'ellipse', KeyT: 'text' };
 window.addEventListener('keydown', e => {
   if (!draw.on || document.querySelector('dialog[open]') || e.target === dText) return;
   const ctrl = e.ctrlKey || e.metaKey;
@@ -1180,7 +1327,7 @@ window.addEventListener('keydown', e => {
   else if (ctrl && e.code === 'KeyC') exportDrawing('copy');
   else if (ctrl && e.code === 'KeyS') exportDrawing('save');
   else if (e.code === 'Escape' || e.code === 'KeyD') closeDraw();
-  else if (e.code === 'Delete' || e.code === 'Backspace') $('#draw-clear').click();
+  else if (e.code === 'Delete' || e.code === 'Backspace') deleteDrawing();
   else if (/^Digit[123]$/.test(e.code)) { draw.size = Number(e.code.slice(5)) - 1; syncDrawBar(); }
   else if (!ctrl && DRAW_KEYS[e.code]) setDrawTool(DRAW_KEYS[e.code]);
 }, true);
@@ -1235,6 +1382,7 @@ $('#update-btn').onclick = () => api.updateInstall();
 // ---------- init
 
 applySettings();
+setCollapsed(!!recall('ctlMini', false));
 api.obsTracks().then(d => {
   obsTracks = d;
   if (state.info) refreshTrackLabels();

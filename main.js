@@ -360,6 +360,18 @@ const DOWNLOAD_URL = 'https://github.com/soqu4c/Tako.player/releases/latest';
 const DONATE_URL = 'https://www.donationalerts.com/r/whytakao';
 ipcMain.handle('open-project', () => shell.openExternal(PROJECT_URL));
 ipcMain.handle('open-donate', () => shell.openExternal(DONATE_URL));
+// "Report a problem": a new issue on GitHub, filled in with what helps to find the cause
+ipcMain.handle('report-bug', (_e, { errors = [], where = '' } = {}) => {
+  const lines = [
+    L('**Что случилось:**', '**What happened:**'), '', '',
+    L('**Что делали перед этим:**', '**What you did before:**'), '', '',
+    '---',
+    `Tako.player ${app.getVersion()}${updateChannel === 'beta' ? ' (beta)' : ''} · Windows ${os.release()}${where ? ' · ' + where : ''}`,
+  ];
+  if (errors.length) lines.push('', L('Последние ошибки программы:', 'Recent errors:'), '```', errors.join('\n').slice(-2500), '```');
+  const url = `${PROJECT_URL}/issues/new?body=${encodeURIComponent(lines.join('\n'))}`;
+  return shell.openExternal(url);
+});
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => {
   for (const p of jobs.values()) p.kill();

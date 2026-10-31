@@ -79,6 +79,16 @@ function done(btn, text = 'Готово') {
   btn.disabled = true;
 }
 
+// The page's last errors go along with a problem report, so the cause can be found
+const recentErrors = [];
+const noteError = msg => {
+  recentErrors.push(`${new Date().toLocaleTimeString()} ${msg}`);
+  if (recentErrors.length > 12) recentErrors.shift();
+};
+window.addEventListener('error', e => noteError(e.message + (e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : '')));
+window.addEventListener('unhandledrejection', e => noteError(String((e.reason && (e.reason.stack || e.reason.message)) || e.reason).split('\n').slice(0, 3).join(' | ')));
+const reportBug = where => api.reportBug({ errors: recentErrors, where });
+
 const SETTING_TABS = [
   {
     id: 'play', title: 'Воспроизведение', icon: 'i-play', rows: [
@@ -206,10 +216,12 @@ async function renderSettings(tabId = settingsTab) {
       <div class="about-update"><span id="about-update-text"></span>
         <div class="about-channel"><span>Версия:</span><button data-ch="stable" class="btn small">Основная</button><button data-ch="beta" class="btn small">Бета (видеоредактор)</button></div>
         <small id="about-channel-hint">Бета получает новое раньше, но может работать с ошибками</small>
-        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-news" class="btn small">Что нового</button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div>
+        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-news" class="btn small">Что нового</button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div>
+        <button id="about-bug" class="btn small ghost"><svg class="i"><use href="#i-info"/></svg>Сообщить об ошибке</button></div>
       <div class="donate"><div>Нравится плеер? Можно поддержать автора — это помогает делать Tako лучше.</div>
         <button id="about-donate" class="btn accent"><svg class="i"><use href="#i-heart"/></svg>Поддержать автора</button></div></div>`;
     $('#about-project').onclick = () => api.openProject();
+    $('#about-bug').onclick = () => reportBug('Настройки');
     $('#about-news').onclick = () => openNews();
     $('#about-donate').onclick = () => api.openDonate();
     $('#about-check').onclick = () => (upd.status === 'ready' ? api.updateInstall() : api.updateCheck());

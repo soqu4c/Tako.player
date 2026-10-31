@@ -615,8 +615,16 @@ body.loaded #timeline:hover #handle { transform: scale(1); }
   --fill: 100%;
   transition: width .3s var(--ease), opacity .2s, margin .3s var(--ease);
 }
-.vol:hover #volume, #volume:focus { width: 90px; opacity: 1; margin: 0 6px 0 2px; }
-#volume::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--fill), rgba(255, 255, 255, .15) var(--fill)); }
+.vol:hover #volume, #volume:focus { width: 120px; opacity: 1; margin: 0 6px 0 2px; }
+/* a tick marks 100%; past it the fill turns red to show the sound is being boosted */
+#volume::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(to right, transparent calc(50% - 1px), rgba(255, 255, 255, .55) calc(50% - 1px), rgba(255, 255, 255, .55) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to right, var(--vol-color, var(--accent)) var(--fill), rgba(255, 255, 255, .15) var(--fill));
+}
+#volume.boost { --vol-color: #ff4d4d; }
 #volume::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
 #volume:focus { outline: none; }
 

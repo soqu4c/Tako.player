@@ -896,24 +896,48 @@ function changeSpeed(dir) {
 }
 
 // Sound comes either from the video itself or from a separate AudioStream
+// Volume goes up to 200%. Above 100% the sound runs through a Web Audio gain, which is set up
+// only the first time it is needed; until then the elements play their sound directly.
+const MAX_VOLUME = 2;
+const boost = { ctx: null, gain: null, wired: new WeakSet() };
+
+function boostWire(el) {
+  if (!boost.ctx || boost.wired.has(el)) return;
+  boost.ctx.createMediaElementSource(el).connect(boost.gain);
+  boost.wired.add(el);
+}
+
 function applyVolume() {
   const { volume, muted } = state;
-  video.volume = volume;
+  if (volume > 1 && !boost.ctx) {
+    boost.ctx = new AudioContext();
+    boost.gain = boost.ctx.createGain();
+    boost.gain.connect(boost.ctx.destination);
+  }
+  const els = [video, ...[state.ext, state.pendingExt].filter(Boolean).map(s => s.el)];
+  if (boost.ctx) {
+    els.forEach(boostWire);
+    boost.gain.gain.value = volume;
+    if (boost.ctx.state === 'suspended') boost.ctx.resume();
+  }
+  const elVolume = boost.ctx ? 1 : volume;
+  video.volume = elVolume;
   video.muted = state.ext ? true : muted;
   for (const s of [state.ext, state.pendingExt]) {
     if (!s) continue;
-    s.el.volume = volume;
+    s.el.volume = elVolume;
     s.el.muted = muted;
   }
   $('#volume').value = muted ? 0 : volume;
-  $('#volume').style.setProperty('--fill', (muted ? 0 : volume) * 100 + '%');
+  $('#volume').style.setProperty('--fill', (muted ? 0 : volume) / MAX_VOLUME * 100 + '%');
+  $('#volume').classList.toggle('boost', !muted && volume > 1);
   $('#mute-icon').setAttribute('href', muted || volume === 0 ? '#i-mute' : '#i-vol');
   store('volume', volume);
   store('muted', muted);
 }
 
 function setVolume(v) {
-  state.volume = clamp(Math.round(v * 100) / 100, 0, 1);
+  state.volume = clamp(Math.round(v * 100) / 100, 0, MAX_VOLUME);
   state.muted = false;
   applyVolume();
 }
@@ -1518,7 +1542,7 @@ document.addEventListener('keydown', e => {
 // ---------- init
 
 state.precise = !!recall('timePrecise', false);
-state.volume = clamp(Number(recall('volume', 1)) || 0, 0, 1);
+state.volume = clamp(Number(recall('volume', 1)) || 0, 0, MAX_VOLUME);
 state.muted = !!recall('muted', false);
 applyVolume();
 renderPlaylist();

@@ -3,6 +3,19 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.2',
+    date: '2026-11-01',
+    sections: [
+      [['Видеоредактор', 'Video editor'], [
+        ['Бегунок, доведённый до края таймлайна, плавно ведёт таймлайн дальше, а не перескакивает на целый экран', 'The playhead held at an edge of the timeline scrolls it on smoothly instead of jumping a screen at a time'],
+        ['Громкость дорожки: 100% — двойным кликом по числу, частые клики по ползунку её не сбрасывают', 'Track volume: double click the number for 100%; quick clicks on the slider no longer reset it'],
+      ]],
+      [['Плеер', 'Player'], [
+        ['Всё из версии 1.3.2: клики по полоске обрезки, правый клик по громкости — 100%', 'Everything from 1.3.2: clicks on the trim strip, right click on the volume for 100%'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0-beta.1',
     date: '2026-11-01',
     sections: [
@@ -15,6 +28,17 @@ const CHANGELOG = [
       ]],
       [['Плеер', 'Player'], [
         ['Несколько звуковых дорожек одновременно — кнопка «+» у дорожек или Shift+A', 'Several sound tracks at once — the “+” button by the tracks or Shift+A'],
+      ]],
+    ],
+  },
+  {
+    version: '1.3.2',
+    date: '2026-11-01',
+    sections: [
+      [['Исправления', 'Fixes'], [
+        ['Полоска с кадрами в обрезке: клик ставит просмотр туда, куда нажали, а не прыгает в начало', 'The frame strip in trimming: a click goes where you clicked instead of jumping to the start'],
+        ['Громкость: правый клик по ползунку — 100%, у отметки 100% ползунок прилипает', 'Volume: right click on the slider sets 100%, and the slider sticks at the 100% mark'],
+        ['Громкость дорожек при сохранении: 100% — двойным кликом по числу, частые клики по ползунку его больше не сбрасывают', 'Track volumes when saving: double click the number for 100%; quick clicks on the slider no longer reset it'],
       ]],
     ],
   },

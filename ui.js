@@ -36,6 +36,7 @@ const DEFAULTS = {
   asrDir: '', // folder for the speech recognizer and its model; empty = default (E:\Tako.player\models)
 };
 const settings = { ...DEFAULTS, ...recall('settings', {}) };
+settings.lang = I18N_LANG; // what i18n.js picked: the saved choice or the system language
 
 function hexRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -64,6 +65,12 @@ function setSetting(key, value) {
   applySettings();
   if (key === 'obsNames' && state.info) refreshTrackLabels();
   if (key.startsWith('discord')) updateDiscord();
+  // A new language is applied by loading the page again
+  if (key === 'lang') {
+    api.setLang(value);
+    savePosition();
+    location.reload();
+  }
 }
 
 // Marks a data action as done right on its button (toasts sit behind the modal)
@@ -83,6 +90,7 @@ const SETTING_TABS = [
   },
   {
     id: 'ui', title: 'Интерфейс', icon: 'i-screen', rows: [
+      { key: 'lang', type: 'segment', label: 'Язык интерфейса / Language', options: [['ru', 'Русский'], ['en', 'English']] },
       { key: 'accent', type: 'accent', label: 'Цвет акцента' },
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
@@ -1095,7 +1103,7 @@ function renderLibrary() {
 
     const card = (f, i) => {
       const sub = subfolderOf(sec, f);
-      const meta = `${sub && !single ? sub + ' · ' : ''}${fmtSize(f.size)} · ${new Date(f.mtime).toLocaleDateString('ru-RU')}`;
+      const meta = `${sub && !single ? sub + ' · ' : ''}${fmtSize(f.size)} · ${new Date(f.mtime).toLocaleDateString(I18N_LANG === 'en' ? 'en-GB' : 'ru-RU')}`;
       return makeCard(f, meta, () => playFrom(files, files.indexOf(f)), i);
     };
 
@@ -2054,7 +2062,7 @@ async function exportMarkers(folder) {
       $('#mk-bar').style.width = '0%';
       const out = await api.exportClip({
         jobId, unique: true, file: item.path,
-        out: `${folder}\\${base} — метка ${all.indexOf(t) + 1} (${fmt(t).replace(/:/g, '-')}).mp4`,
+        out: `${folder}\\${base} — ${I18N_LANG === 'en' ? 'mark' : 'метка'} ${all.indexOf(t) + 1} (${fmt(t).replace(/:/g, '-')}).mp4`,
         start, end, format: 'mp4', mode: $('#mk-mode').value, crf: 22, video: !!state.videoStream,
         audio, subs: [], mix, mixTitle: mix ? 'Все дорожки' : null, volumes: {},
         titles: Object.fromEntries(state.audioStreams.map((s, k) => [s.index, trackName(s, k)]).filter(([, v]) => v)),
@@ -2125,7 +2133,7 @@ async function concatMarkers(out) {
 
 $('#mk-concat').onclick = async () => {
   const item = currentItem();
-  const out = await api.saveDialog({ source: item.path, ext: 'mp4', name: item.name.replace(/\.[^.]+$/, '') + ' — нарезка' });
+  const out = await api.saveDialog({ source: item.path, ext: 'mp4', name: i18nText(item.name.replace(/\.[^.]+$/, '') + ' — нарезка') });
   if (out) concatMarkers(out);
 };
 $('#btn-markers').onclick = openMarkers;
@@ -2303,7 +2311,7 @@ $('#btn-pip').onclick = togglePip;
 // ---------- Discord status
 
 const DISCORD_ICON = 'https://raw.githubusercontent.com/soqu4c/Tako.player/main/assets/icon.png';
-const DISCORD_BUTTON = { label: 'Скачать Tako.player', url: 'https://github.com/soqu4c/Tako.player/releases/latest' };
+const DISCORD_BUTTON = { label: I18N_LANG === 'en' ? 'Get Tako.player' : 'Скачать Tako.player', url: 'https://github.com/soqu4c/Tako.player/releases/latest' };
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 // What the status shows: the folder (OBS sorts recordings by game) or the file name,
@@ -2311,13 +2319,13 @@ const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 function discordActivity() {
   const base = { assets: { large_image: DISCORD_ICON, large_text: 'Tako.player' }, buttons: [DISCORD_BUTTON] };
   const item = currentItem();
-  if (!state.info || !item) return { ...base, type: 3, details: 'Выбирает, что посмотреть' };
+  if (!state.info || !item) return { ...base, type: 3, details: I18N_LANG === 'en' ? 'Choosing what to watch' : 'Выбирает, что посмотреть' };
   const folder = item.path.split(/[\\/]/).slice(-2, -1)[0] || '';
   const name = item.name.replace(/\.[^.]+$/, '');
   const activity = {
     ...base,
     type: state.videoStream ? 3 : 2, // watching / listening
-    details: cut(settings.discordName ? name : folder || (state.videoStream ? 'Видео' : 'Музыка'), 128),
+    details: cut(settings.discordName ? name : folder || i18nText(state.videoStream ? 'Видео' : 'Музыка'), 128),
   };
   if (settings.discordName && folder) activity.state = cut(folder, 128);
   const d = duration();
@@ -2326,7 +2334,8 @@ function discordActivity() {
     const rate = video.playbackRate || 1;
     activity.timestamps = { start: Math.round(now - video.currentTime * 1000 / rate), end: Math.round(now + (d - video.currentTime) * 1000 / rate) };
   } else {
-    activity.state = settings.discordName && folder ? cut(`${folder} · на паузе`, 128) : 'На паузе';
+    const paused = i18nText('На паузе');
+    activity.state = settings.discordName && folder ? cut(`${folder} · ${paused.toLowerCase()}`, 128) : paused;
   }
   return activity;
 }
@@ -2387,6 +2396,7 @@ $('#update-btn').onclick = () => api.updateInstall();
 // ---------- init
 
 applySettings();
+api.setLang(I18N_LANG);
 setCollapsed(!!recall('ctlMini', false));
 updateDiscord();
 api.obsTracks().then(d => {

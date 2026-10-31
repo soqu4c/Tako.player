@@ -42,6 +42,7 @@
       "preload.js",
       "renderer.js",
       "ui.js",
+      "i18n.js",
       "index.html",
       "styles.css",
       "assets/**",

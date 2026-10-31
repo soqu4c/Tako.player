@@ -42,6 +42,27 @@ app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
 // Settings, track names and positions stay in the folder used before the rename
 app.setPath('userData', path.join(app.getPath('appData'), 'takao'));
 
+// Interface language. The page keeps the choice; it is mirrored here for native dialogs and
+// file names, and for Chromium's own words (picture-in-picture title) from the next start.
+const langFile = path.join(app.getPath('userData'), 'lang.json');
+let uiLang = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(langFile, 'utf8')).lang;
+  } catch {
+    return null;
+  }
+})();
+if (uiLang) app.commandLine.appendSwitch('lang', uiLang === 'en' ? 'en-US' : 'ru');
+const L = (ru, en) => (uiLang === 'en' ? en : ru);
+
+ipcMain.on('set-lang', (_e, lang) => {
+  if (lang !== 'ru' && lang !== 'en') return;
+  uiLang = lang;
+  try {
+    fs.writeFileSync(langFile, JSON.stringify({ lang }));
+  } catch {}
+});
+
 let win = null;
 const jobs = new Map();
 const probes = new Map();
@@ -757,7 +778,7 @@ ipcMain.handle('asr-run', async (_e, o) => {
     // 3. the SRT next to the video, with times back on the whole file's clock
     const srt = shiftSrt(fs.readFileSync(tmpBase + '.srt', 'utf8'), start);
     const { dir: vdir, name } = path.parse(o.file);
-    const out = freePath(path.join(vdir, `${name}${o.end != null ? ' (фрагмент)' : ''}.${o.lang && o.lang !== 'auto' ? o.lang + '.' : ''}srt`));
+    const out = freePath(path.join(vdir, `${name}${o.end != null ? L(' (фрагмент)', ' (fragment)') : ''}.${o.lang && o.lang !== 'auto' ? o.lang + '.' : ''}srt`));
     fs.writeFileSync(out, srt, 'utf8');
     return { out, lines: (srt.match(/-->/g) || []).length };
   } finally {
@@ -857,8 +878,8 @@ ipcMain.handle('open-files', async () => {
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile', 'multiSelections'],
     filters: [
-      { name: 'Медиафайлы', extensions: MEDIA_EXT },
-      { name: 'Все файлы', extensions: ['*'] },
+      { name: L('Медиафайлы', 'Media files'), extensions: MEDIA_EXT },
+      { name: L('Все файлы', 'All files'), extensions: ['*'] },
     ],
   });
   return r.canceled ? [] : r.filePaths;
@@ -888,7 +909,7 @@ ipcMain.handle('folder-media', (_e, file) => {
 ipcMain.handle('pick-subtitle', async () => {
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
-    filters: [{ name: 'Субтитры', extensions: SUB_EXT }],
+    filters: [{ name: L('Субтитры', 'Subtitles'), extensions: SUB_EXT }],
   });
   return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
 });
@@ -958,7 +979,7 @@ const PNG_DATA = 'data:image/png;base64,';
 ipcMain.handle('save-image', async (_e, { data, file, time }) => {
   if (!String(data).startsWith(PNG_DATA)) throw new Error('неверная картинка');
   const r = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(app.getPath('pictures'), `${path.parse(file).name}_${stamp(time)}_рисунок.png`),
+    defaultPath: path.join(app.getPath('pictures'), `${path.parse(file).name}_${stamp(time)}_${L('рисунок', 'drawing')}.png`),
     filters: [{ name: 'PNG', extensions: ['png'] }],
   });
   if (r.canceled || !r.filePath) return null;
@@ -973,7 +994,7 @@ ipcMain.handle('copy-image', (_e, data) => {
 
 ipcMain.handle('save-dialog', async (_e, { source, ext, name }) => {
   const r = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(path.dirname(source), `${name || path.parse(source).name + '_фрагмент'}.${ext}`),
+    defaultPath: path.join(path.dirname(source), `${name || path.parse(source).name + L('_фрагмент', '_clip')}.${ext}`),
     filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
   });
   return r.canceled || !r.filePath ? null : r.filePath;

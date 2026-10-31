@@ -204,7 +204,7 @@
 .ed-toggles button.on { color: var(--text); background: rgba(255, 255, 255, .14); }
 .ed-toggles .i { width: 16px; height: 16px; }
 .ed-tl-body { display: grid; grid-template-columns: var(--head-w) minmax(0, 1fr); min-height: 0; }
-.ed { --head-w: 168px; }
+.ed { --head-w: 230px; }
 #ed-heads { border-right: 1px solid var(--line); overflow: hidden; }
 .ed-ruler-pad { position: sticky; top: 0; z-index: 1; height: 30px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .ed-trhead {
@@ -521,3 +521,17 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 /* the bottom edge of a track header: drag it to make the track taller or lower */
 .ed-trsize { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; z-index: 2; cursor: ns-resize; }
 .ed-trsize:hover { background: rgba(var(--accent-rgb), .5); }
+
+/* track volume in the track header */
+.ed-tvol { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.ed-tvol input[type=range] {
+  -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; width: auto !important; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, #4c9bff var(--p), #34353d var(--p));
+}
+.ed-tvol input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4); cursor: ew-resize; }
+.ed-tvol b { width: 36px; text-align: right; font: 600 11px Consolas, monospace; color: var(--soft); cursor: default; }
+.ed.mini-tracks .ed-tvol input[type=range] { display: block; }
+/* Mute / Solo read as warnings when on, as in Premiere */
+.ed-trhead .ed-tb.m.on { background: #d84a3a; color: #fff; }
+.ed-trhead .ed-tb.s.on { background: #d6a52a; color: #111; }
+.ed-trhead.off .ed-trname { opacity: .45; }

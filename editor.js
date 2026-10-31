@@ -306,21 +306,32 @@ function renderHeads() {
     if (tr.kind === 'audio') {
       toggle('m', st.muted, 'Без звука (Mute)', 'M', () => { st.muted = !st.muted; });
       toggle('s', st.solo, 'Только эта дорожка (Solo)', 'S', () => { st.solo = !st.solo; });
+      // track volume: a slider with the level next to it; double click on the number = 100%
+      const wrap = document.createElement('span');
+      wrap.className = 'ed-tvol';
       const vol = document.createElement('input');
       vol.type = 'range';
       vol.min = 0;
       vol.max = 2;
-      vol.step = 0.05;
+      vol.step = 0.01;
       vol.value = st.volume;
-      vol.title = 'Громкость дорожки: ' + Math.round(st.volume * 100) + '%';
+      const pct = document.createElement('b');
+      const paint = () => {
+        pct.textContent = Math.round(st.volume * 100) + '%';
+        vol.style.setProperty('--p', (st.volume / 2 * 100) + '%');
+        wrap.title = 'Громкость дорожки ' + tr.id + ': ' + Math.round(st.volume * 100) + '% (двойной клик по числу — 100%)';
+      };
+      paint();
       vol.onpointerdown = () => edCommit();
       vol.oninput = () => {
-        st.volume = Number(vol.value);
-        vol.title = 'Громкость дорожки: ' + Math.round(st.volume * 100) + '%';
+        st.volume = Math.abs(Number(vol.value) - 1) < 0.03 ? 1 : Number(vol.value); // sticks at 100%
+        paint();
         store('edProject', ed.p);
         syncPreview(true);
       };
-      h.append(vol);
+      pct.ondblclick = () => { edCommit(); st.volume = 1; vol.value = 1; paint(); store('edProject', ed.p); syncPreview(true); };
+      wrap.append(vol, pct);
+      h.append(wrap);
     } else {
       toggle('eye', !st.hidden, st.hidden ? 'Показать дорожку' : 'Скрыть дорожку',
         `<svg class="i"><use href="#${st.hidden ? 'i-eye-off' : 'i-eye'}"/></svg>`, () => { st.hidden = !st.hidden; });

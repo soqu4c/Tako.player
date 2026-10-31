@@ -1515,14 +1515,34 @@ $('#ed-screen').onclick = edToggle;
 // The preview keeps the project's frame shape
 function fitScreen() {
   const wrap = $('#ed-screen-wrap');
-  const r = wrap.getBoundingClientRect();
-  const k = Math.min(r.width / ed.p.w, r.height / ed.p.h);
+  // the picture floats inside the monitor (it never makes the monitor taller), with a margin
+  const k = Math.max(0.01, Math.min((wrap.clientWidth - 16) / ed.p.w, (wrap.clientHeight - 16) / ed.p.h));
   const s = $('#ed-screen');
   s.style.width = Math.floor(ed.p.w * k) + 'px';
   s.style.height = Math.floor(ed.p.h * k) + 'px';
   s.style.setProperty('--ed-h', Math.floor(ed.p.h * k) + 'px');
 }
 new ResizeObserver(fitScreen).observe($('#ed-screen-wrap'));
+
+// The border between the monitor and the timeline can be dragged; its place is remembered
+const edBox = $('.ed');
+const setTopH = px => edBox.style.setProperty('--top-h', Math.round(clamp(px, 160, edBox.clientHeight - 220)) + 'px');
+{
+  const saved = recall('edTopH', 0);
+  if (saved) setTopH(saved);
+}
+$('.ed-split').addEventListener('pointerdown', e => {
+  const bar = e.currentTarget;
+  bar.setPointerCapture(e.pointerId);
+  bar.classList.add('drag');
+  const top = edBox.getBoundingClientRect().top + 4;
+  bar.onpointermove = ev => setTopH(ev.clientY - top - 3);
+  bar.onpointerup = () => {
+    bar.onpointermove = bar.onpointerup = null;
+    bar.classList.remove('drag');
+    store('edTopH', $('.ed-top').getBoundingClientRect().height);
+  };
+});
 new ResizeObserver(() => renderRuler()).observe(scroller);
 // track names follow the lanes when the timeline scrolls up and down
 scroller.addEventListener('scroll', () => {

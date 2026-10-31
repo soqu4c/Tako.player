@@ -21,8 +21,9 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: minmax(230px, 1fr) minmax(300px, 52%);
-  gap: 4px;
+  grid-template-rows: minmax(160px, var(--top-h, 1fr)) 6px minmax(200px, 1fr);
+  row-gap: 0;
+  column-gap: 4px;
   padding: 4px;
   background: #101114;
 }
@@ -82,7 +83,8 @@
 
 /* preview */
 .ed-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-#ed-screen-wrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 8px; background: #0b0c0f; }
+#ed-screen-wrap { flex: 1 1 0; min-height: 60px; position: relative; overflow: hidden; background: #0b0c0f; }
+#ed-screen-wrap > #ed-screen { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 #ed-screen { position: relative; background: #000; overflow: hidden; box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 #ed-screen video, #ed-screen .ed-layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 #ed-v2, #ed-screen .ed-layer.V2 { z-index: 2; }
@@ -106,7 +108,7 @@
 .ed-title.sel { outline-color: rgba(var(--accent-rgb), .9); }
 .ed-title.box { background: rgba(0, 0, 0, .55); padding: .2em .35em; text-shadow: none; }
 .ed-pos { display: flex; gap: 4px; flex-wrap: wrap; }
-.ed-transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 6px 12px 8px; border-top: 1px solid #26272e; }
+.ed-transport { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 6px 12px 8px; border-top: 1px solid #26272e; }
 .ed-transport-btns { display: flex; align-items: center; gap: 4px; }
 .ed-transport .play { width: 34px; height: 34px; }
 .ed-mon-tc, .ed-mon-dur { font: 600 14px Consolas, 'Cascadia Mono', monospace; }
@@ -452,3 +454,6 @@ body.fx-scrub, body.fx-scrub * { cursor: ew-resize !important; }
 .ed-labels { display: grid; grid-template-columns: repeat(8, 18px); gap: 5px; padding: 4px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .ed-labels button { width: 18px; height: 18px; border-radius: 4px; border: 2px solid transparent; }
 .ed-labels button.on, .ed-labels button:hover { border-color: #fff; }
+.ed-split { cursor: row-resize; position: relative; }
+.ed-split::after { content: ""; position: absolute; left: 50%; top: 2px; width: 40px; height: 2px; margin-left: -20px; border-radius: 2px; background: #34353d; }
+.ed-split:hover::after, .ed-split.drag::after { background: #4c9bff; }

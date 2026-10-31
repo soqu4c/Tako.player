@@ -1555,7 +1555,17 @@ $('#busy-cancel').onclick = () => { if (state.busyJob) api.cancel(state.busyJob)
 $('#audio-select').addEventListener('change', e => { selectAudio(Number(e.target.value)); e.target.blur(); });
 $('#sub-select').addEventListener('change', e => { selectSub(e.target.value); e.target.blur(); });
 $('#speed').addEventListener('change', e => { setSpeed(Number(e.target.value)); e.target.blur(); });
-$('#volume').addEventListener('input', e => setVolume(Number(e.target.value)));
+// Sticks at the 100% mark so it is easy to hit; right click goes back to 100% (a double click
+// would also catch quick clicks along the slider)
+$('#volume').addEventListener('input', e => {
+  const v = Number(e.target.value);
+  setVolume(Math.abs(v - 1) < 0.04 ? 1 : v);
+});
+$('#volume').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  setVolume(1);
+  osd('Громкость 100%');
+});
 $('#volume').addEventListener('change', e => e.target.blur());
 
 // Buttons keep focus after a click, which would make Space press them again

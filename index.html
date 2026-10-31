@@ -550,17 +550,45 @@
         <option value="h265">H.265 — файл меньше</option>
       </select>
     </label>
-    <div class="wide">Качество видео
-      <span class="ed-ex-mode">
-        <label><input type="radio" name="ed-ex-mode" value="crf" checked>По качеству</label>
-        <label><input type="radio" name="ed-ex-mode" value="bitrate">По битрейту</label>
-      </span>
+    <div class="ed-ex-sec wide">Основные настройки видео
+      <button id="ed-ex-match" class="btn small" title="Размер и частота кадров первого видео на таймлайне">Как в исходнике</button>
     </div>
+    <div class="wide ed-ex-size">
+      <label>Ширина<input type="number" id="ed-ex-w" class="time-input" min="16" max="7680" step="2"></label>
+      <button id="ed-ex-lock" class="icon sm on" title="Сохранять пропорции кадра">🔗</button>
+      <label>Высота<input type="number" id="ed-ex-h" class="time-input" min="16" max="4320" step="2"></label>
+      <label>Частота кадров
+        <select id="ed-ex-fps">
+          <option value="23.976">23,976</option><option value="24">24</option><option value="25">25</option>
+          <option value="29.97">29,97</option><option value="30">30</option><option value="50">50</option>
+          <option value="59.94">59,94</option><option value="60">60</option>
+        </select>
+      </label>
+    </div>
+    <label id="ed-ex-profile-row">Профиль
+      <select id="ed-ex-profile">
+        <option value="high">High</option>
+        <option value="main">Main</option>
+        <option value="baseline">Baseline (старые устройства)</option>
+      </select>
+    </label>
+    <div class="ed-ex-sec wide">Настройки битрейта</div>
+    <label class="wide">Кодирование
+      <select id="ed-ex-mode">
+        <option value="crf">По качеству (CRF) — размер подстраивается</option>
+        <option value="vbr1">VBR, 1 проход</option>
+        <option value="vbr2">VBR, 2 прохода — точнее, вдвое дольше</option>
+        <option value="cbr">CBR — постоянный битрейт</option>
+      </select>
+    </label>
     <label class="wide" id="ed-ex-crf-row">Качество: <b id="ed-ex-crf-text"></b>
       <input type="range" id="ed-ex-crf" min="14" max="32" step="1">
     </label>
-    <label class="wide" id="ed-ex-br-row" hidden>Битрейт видео, Мбит/с
-      <input type="number" id="ed-ex-br" class="time-input" min="1" max="150" step="1">
+    <label class="wide ed-ex-slider" id="ed-ex-br-row">Целевой битрейт, Мбит/с
+      <span><input type="range" id="ed-ex-br-range" min="1" max="100" step="1"><input type="number" id="ed-ex-br" class="time-input" min="1" max="150" step="1"></span>
+    </label>
+    <label class="wide ed-ex-slider" id="ed-ex-max-row">Максимальный битрейт, Мбит/с
+      <span><input type="range" id="ed-ex-max-range" min="1" max="150" step="1"><input type="number" id="ed-ex-max" class="time-input" min="1" max="200" step="1"></span>
     </label>
     <label>Скорость кодирования
       <select id="ed-ex-preset">

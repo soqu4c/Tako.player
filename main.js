@@ -340,9 +340,10 @@ app.on('will-quit', () => {
 
 // ---------- ffmpeg helpers
 
-function run(bin, args, { jobId, duration } = {}) {
+// part: [start, share] of the progress bar this run fills (a two-pass export has two runs)
+function run(bin, args, { jobId, duration, part = [0, 1], cwd } = {}) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(bin, args, { windowsHide: true });
+    const proc = spawn(bin, args, { windowsHide: true, cwd });
     if (jobId) jobs.set(jobId, proc);
     const out = [];
     let err = '';
@@ -355,7 +356,7 @@ function run(bin, args, { jobId, duration } = {}) {
       buf = lines.pop();
       for (const line of lines) {
         const m = /^out_time_us=(\d+)/.exec(line);
-        if (m && win) win.webContents.send('progress', { jobId, value: Math.min(1, Number(m[1]) / 1e6 / duration) });
+        if (m && win) win.webContents.send('progress', { jobId, value: part[0] + part[1] * Math.min(1, Number(m[1]) / 1e6 / duration) });
       }
     });
     proc.stderr.on('data', d => { err = (err + d).slice(-8000); });
@@ -1211,7 +1212,9 @@ const FONT = ffPath(path.join(process.env.SystemRoot || 'C:\\Windows', 'Fonts', 
 const num = x => (Math.round(x * 1000) / 1000).toString();
 
 ipcMain.handle('editor-export', async (_e, o) => {
-  const { w, h, fps } = o;
+  const { w, h } = o;
+  // NTSC rates are exact fractions for ffmpeg
+  const fps = { 23.976: '24000/1001', 29.97: '30000/1001', 59.94: '60000/1001' }[o.fps] || String(o.fps);
   const T = o.duration;
   if (!(T > 0)) throw new Error(L('Таймлайн пуст', 'The timeline is empty'));
   if ([...o.video, ...o.audio].some(c => path.resolve(c.file).toLowerCase() === path.resolve(o.out).toLowerCase())) {
@@ -1266,22 +1269,35 @@ ipcMain.handle('editor-export', async (_e, o) => {
   const script = path.join(tmp, 'graph.txt');
   fs.writeFileSync(script, graph.join(';\n'), 'utf8');
   // Encoding from the export window: H.264 or H.265, by quality (CRF) or by bitrate
+  // Bitrate modes as in Premiere: quality (CRF), constant (CBR), variable in one or two passes
   const enc = o.enc || {};
   const h265 = enc.codec === 'h265';
+  const mode = enc.mode === 'bitrate' ? 'vbr1' : enc.mode || 'crf';
   const vArgs = ['-c:v', h265 ? 'libx265' : 'libx264', '-preset', enc.preset || 'veryfast'];
-  if (enc.mode === 'bitrate') {
-    const k = Math.round((enc.vbitrate || 8) * 1000);
-    vArgs.push('-b:v', `${k}k`, '-maxrate', `${Math.round(k * 1.5)}k`, '-bufsize', `${k * 2}k`);
-  } else vArgs.push('-crf', String(enc.crf || (h265 ? 24 : 20)));
+  const target = Math.round((enc.vbitrate || 12) * 1000);
+  const max = Math.max(target, Math.round((enc.vmax || enc.vbitrate * 1.5 || 18) * 1000));
+  if (mode === 'crf') vArgs.push('-crf', String(enc.crf || (h265 ? 24 : 20)));
+  else if (mode === 'cbr') {
+    vArgs.push('-b:v', `${target}k`, '-minrate', `${target}k`, '-maxrate', `${target}k`, '-bufsize', `${target}k`);
+    if (!h265) vArgs.push('-x264-params', 'nal-hrd=cbr');
+  } else vArgs.push('-b:v', `${target}k`, '-maxrate', `${max}k`, '-bufsize', `${max * 2}k`);
+  if (!h265 && enc.profile) vArgs.push('-profile:v', enc.profile);
   if (h265 && /\.mp4$/i.test(o.out)) vArgs.push('-tag:v', 'hvc1'); // so Windows and phones play it
   if (h265) vArgs.push('-x265-params', 'log-level=error');
-  args.push('-filter_complex_script', script, '-map', '[vout]', '-map', '[aout]', '-t', num(T),
-    ...vArgs, '-pix_fmt', 'yuv420p', '-r', String(fps),
-    '-c:a', 'aac', '-b:a', `${enc.abitrate || 192}k`);
-  if (/\.mp4$/i.test(o.out)) args.push('-movflags', '+faststart');
-  args.push(o.out);
+  const common = ['-filter_complex_script', script, '-map', '[vout]', '-t', num(T), ...vArgs, '-pix_fmt', 'yuv420p', '-r', fps];
   try {
-    await run(FFMPEG, args, { jobId: o.jobId, duration: T });
+    if (mode === 'vbr2') {
+      // first pass only measures the picture; the second one writes the file
+      const log = path.join(tmp, 'pass');
+      // x265 keeps its statistics next to it (a drive letter would break its option string)
+      const pass = h265 ? n => ['-x265-params', `log-level=error:pass=${n}:stats=pass.log`] : n => ['-pass', String(n), '-passlogfile', log];
+      await run(FFMPEG, [...args, ...common, ...pass(1), '-map', '[aout]', '-c:a', 'aac', '-f', 'null', 'NUL'], { jobId: o.jobId, duration: T, part: [0, 0.5], cwd: tmp });
+      args.push(...common, ...pass(2));
+    } else args.push(...common);
+    args.push('-map', '[aout]', '-c:a', 'aac', '-b:a', `${enc.abitrate || 192}k`);
+    if (/\.mp4$/i.test(o.out)) args.push('-movflags', '+faststart');
+    args.push(o.out);
+    await run(FFMPEG, args, { jobId: o.jobId, duration: T, part: mode === 'vbr2' ? [0.5, 0.5] : [0, 1], cwd: tmp });
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

@@ -113,7 +113,7 @@ async function edImport(paths) {
         name: api.basename(file),
         dur: image ? 3600 : parseFloat(info.format.duration) || 0,
         image,
-        video: v ? { index: v.index, w: v.width, h: v.height } : null,
+        video: v ? { index: v.index, w: v.width, h: v.height, fps: commonFps(v.avg_frame_rate || v.r_frame_rate) } : null,
         audio,
       };
       ed.p.media.push(m);
@@ -196,11 +196,9 @@ function edPlace(m, trackId, start) {
   ed.p.clips.push(...made);
   // the first video sets the frame size and rate of the project
   if (m.video && !ed.p.clips.some(c => c.track[0] === 'V' && !made.includes(c)) && m.video.w && m.video.h && !m.image) {
-    const res = `${m.video.w}x${m.video.h}`;
-    if ([...$('#ed-res').options].some(o => o.value === res)) {
-      ed.p.w = m.video.w;
-      ed.p.h = m.video.h;
-    }
+    ed.p.w = m.video.w;
+    ed.p.h = m.video.h;
+    if (m.video.fps) ed.p.fps = m.video.fps;
   }
   resolveOverlaps(made);
   ed.sel = new Set([made[0].id]);
@@ -841,12 +839,28 @@ function syncEl(el, file, local, force) {
   el.dataset.want = local;
   if (el.readyState < 1) {
     // still opening: the seek above takes the newest wanted time
+  } else if (el.seeking) {
+    // A big recording can take a while to seek. Asking again every frame would restart the
+    // seek forever, so the newest wanted time is applied once this seek is done.
+    if (!el.seekQueued) {
+      el.seekQueued = true;
+      el.addEventListener('seeked', () => {
+        el.seekQueued = false;
+        const want = Number(el.dataset.want) + (ed.playing ? 0.15 : 0);
+        if (Math.abs(el.currentTime - want) > 0.3) el.currentTime = want;
+      }, { once: true });
+    }
   } else if (force || Math.abs(el.currentTime - local) > 0.3) {
     el.currentTime = local;
   }
-  if (ed.playing && el.paused) el.play().catch(() => {});
-  if (!ed.playing && !el.paused) el.pause();
+  const run = ed.playing && !ed.holding;
+  if (run && el.paused) el.play().catch(() => {});
+  if (!run && !el.paused) el.pause();
 }
+
+// Something on screen or in the speakers is still seeking or loading
+const edWaiting = () => [...Object.values(edV), ...edAudio.values()]
+  .some(el => el.dataset.src && !el.hidden && el.src && (el.seeking || el.readyState < 3));
 
 function syncPreview(force) {
   const t = ed.t;
@@ -936,10 +950,28 @@ function seekEd(t) {
   ed.t = clamp(t, 0, Math.max(edDuration(), 0));
   if (ed.playing) clock = { t0: ed.t, n0: performance.now() };
   syncPreview(true);
+  // a jump out of sight brings the timeline along
+  const x = xOf(ed.t);
+  if (x < scroller.scrollLeft || x > scroller.scrollLeft + scroller.clientWidth - 20) scroller.scrollLeft = x - scroller.clientWidth / 3;
 }
 
 function edTick() {
   if (!ed.playing) return;
+  // while the picture or sound catches up after a jump the playhead waits for it, so
+  // time does not run on without them
+  ed.holding = false;
+  if (edWaiting()) {
+    if (!clock.wait) clock.wait = performance.now();
+    if (performance.now() - clock.wait < 4000) {
+      ed.holding = true; // the ready ones wait too, so sound and picture start together
+      syncPreview(false);
+      requestAnimationFrame(edTick);
+      return;
+    }
+  }
+  if (clock.wait) {
+    clock = { t0: ed.t, n0: performance.now() };
+  }
   ed.t = clock.t0 + (performance.now() - clock.n0) / 1000;
   if (ed.t >= edDuration()) {
     ed.t = edDuration();
@@ -992,9 +1024,22 @@ scroller.addEventListener('scroll', () => { $('#ed-heads').scrollTop = scroller.
 
 // ---------- project settings
 
+// "30000/1001" -> 29.97, rounded to the usual rates
+function commonFps(rate) {
+  const [a, b] = String(rate || '').split('/').map(Number);
+  const f = b ? a / b : a;
+  if (!(f > 0)) return 0;
+  return [23.976, 24, 25, 29.97, 30, 50, 59.94, 60].find(x => Math.abs(x - f) < 0.02) || Math.round(f);
+}
+
+// A size or rate that is not in the toolbar lists gets its own entry there
+function ensureOption(sel, value, text) {
+  if (![...sel.options].some(o => o.value === value)) sel.add(new Option(text, value));
+  sel.value = value;
+}
 function renderProjectSettings() {
-  $('#ed-res').value = `${ed.p.w}x${ed.p.h}`;
-  $('#ed-fps').value = String(ed.p.fps);
+  ensureOption($('#ed-res'), `${ed.p.w}x${ed.p.h}`, `${ed.p.w}×${ed.p.h}`);
+  ensureOption($('#ed-fps'), String(ed.p.fps), `${fpsText(ed.p.fps)} к/с`);
   fitScreen();
 }
 $('#ed-res').onchange = e => {
@@ -1098,40 +1143,92 @@ function exportSpec() {
 }
 
 // Export settings, remembered between projects
-const edEnc = Object.assign({ format: 'mp4', codec: 'h264', mode: 'crf', crf: 20, vbitrate: 12, preset: 'veryfast', abitrate: 192 }, recall('edExport', {}));
+const edEnc = Object.assign({ format: 'mp4', codec: 'h264', profile: 'high', mode: 'crf', crf: 20, vbitrate: 12, vmax: 18, preset: 'veryfast', abitrate: 192, lock: true }, recall('edExport', {}));
+if (edEnc.mode === 'bitrate') edEnc.mode = 'vbr1';
 const crfWord = v => (v <= 17 ? 'почти без потерь' : v <= 20 ? 'высокое' : v <= 24 ? 'хорошее' : v <= 28 ? 'среднее' : 'низкое, файл маленький');
+const fpsText = f => String(f).replace('.', ',');
 
 function renderExportForm() {
   $('#ed-ex-format').value = edEnc.format;
   $('#ed-ex-codec').value = edEnc.codec;
-  document.querySelector(`input[name=ed-ex-mode][value=${edEnc.mode}]`).checked = true;
+  $('#ed-ex-w').value = ed.p.w;
+  $('#ed-ex-h').value = ed.p.h;
+  $('#ed-ex-lock').classList.toggle('on', edEnc.lock);
+  $('#ed-ex-fps').value = String(ed.p.fps);
+  $('#ed-ex-profile').value = edEnc.profile;
+  $('#ed-ex-profile-row').hidden = edEnc.codec !== 'h264';
+  $('#ed-ex-mode').value = edEnc.mode;
   $('#ed-ex-crf').value = edEnc.crf;
   $('#ed-ex-crf-text').textContent = `${crfWord(edEnc.crf)} (CRF ${edEnc.crf})`;
-  $('#ed-ex-br').value = edEnc.vbitrate;
+  $('#ed-ex-br').value = $('#ed-ex-br-range').value = edEnc.vbitrate;
+  $('#ed-ex-max').value = $('#ed-ex-max-range').value = edEnc.vmax;
   $('#ed-ex-preset').value = edEnc.preset;
   $('#ed-ex-abr').value = String(edEnc.abitrate);
   $('#ed-ex-crf-row').hidden = edEnc.mode !== 'crf';
-  $('#ed-ex-br-row').hidden = edEnc.mode !== 'bitrate';
+  $('#ed-ex-br-row').hidden = edEnc.mode === 'crf';
+  $('#ed-ex-max-row').hidden = edEnc.mode !== 'vbr1' && edEnc.mode !== 'vbr2';
   const T = edDuration();
-  let text = `${ed.p.w}×${ed.p.h}, ${ed.p.fps} к/с, длина ${fmt(T)}.`;
-  if (edEnc.mode === 'bitrate') text += ` Примерный размер: ${fmtSize((edEnc.vbitrate * 1000 + edEnc.abitrate) * 125 * T)}.`;
+  let text = `${ed.p.w}×${ed.p.h}, ${fpsText(ed.p.fps)} к/с, длина ${fmt(T)}.`;
+  if (edEnc.mode !== 'crf') text += ` Примерный размер: ${fmtSize((edEnc.vbitrate * 1000 + edEnc.abitrate) * 125 * T)}.`;
   $('#ed-ex-summary').textContent = text;
 }
-for (const id of ['#ed-ex-format', '#ed-ex-codec', '#ed-ex-crf', '#ed-ex-br', '#ed-ex-preset', '#ed-ex-abr']) {
-  $(id).addEventListener('input', () => {
-    edEnc.format = $('#ed-ex-format').value;
-    edEnc.codec = $('#ed-ex-codec').value;
-    edEnc.crf = Number($('#ed-ex-crf').value);
-    edEnc.vbitrate = clamp(Number($('#ed-ex-br').value) || 12, 1, 150);
-    edEnc.preset = $('#ed-ex-preset').value;
-    edEnc.abitrate = Number($('#ed-ex-abr').value);
-    store('edExport', edEnc);
-    renderExportForm();
-  });
+
+function readExportForm(changed) {
+  edEnc.format = $('#ed-ex-format').value;
+  edEnc.codec = $('#ed-ex-codec').value;
+  edEnc.profile = $('#ed-ex-profile').value;
+  edEnc.mode = $('#ed-ex-mode').value;
+  edEnc.crf = Number($('#ed-ex-crf').value);
+  // slider and number box of a bitrate follow each other
+  const br = changed === 'ed-ex-br-range' ? $('#ed-ex-br-range').value : $('#ed-ex-br').value;
+  const mx = changed === 'ed-ex-max-range' ? $('#ed-ex-max-range').value : $('#ed-ex-max').value;
+  edEnc.vbitrate = clamp(Number(br) || 12, 1, 150);
+  edEnc.vmax = clamp(Number(mx) || 18, 1, 200);
+  if (changed && changed.startsWith('ed-ex-br') && edEnc.vmax < edEnc.vbitrate) edEnc.vmax = edEnc.vbitrate;
+  if (changed && changed.startsWith('ed-ex-max') && edEnc.vmax < edEnc.vbitrate) edEnc.vbitrate = edEnc.vmax;
+  edEnc.preset = $('#ed-ex-preset').value;
+  edEnc.abitrate = Number($('#ed-ex-abr').value);
+  // frame size: even numbers (the encoders need them), proportions kept when the link is on
+  const even = v => Math.max(16, Math.round(v / 2) * 2);
+  let w = even(Number($('#ed-ex-w').value) || ed.p.w);
+  let h = even(Number($('#ed-ex-h').value) || ed.p.h);
+  if (edEnc.lock && changed === 'ed-ex-w') h = even(w * ed.p.h / ed.p.w);
+  if (edEnc.lock && changed === 'ed-ex-h') w = even(h * ed.p.w / ed.p.h);
+  const fps = Number($('#ed-ex-fps').value);
+  if (w !== ed.p.w || h !== ed.p.h || fps !== ed.p.fps) {
+    edCommit();
+    Object.assign(ed.p, { w, h, fps });
+    store('edProject', ed.p);
+    renderProjectSettings();
+  }
+  store('edExport', edEnc);
+  renderExportForm();
 }
-for (const r of document.querySelectorAll('input[name=ed-ex-mode]')) {
-  r.onchange = () => { edEnc.mode = r.value; store('edExport', edEnc); renderExportForm(); };
+for (const id of ['ed-ex-format', 'ed-ex-codec', 'ed-ex-profile', 'ed-ex-mode', 'ed-ex-crf', 'ed-ex-br', 'ed-ex-br-range', 'ed-ex-max', 'ed-ex-max-range', 'ed-ex-preset', 'ed-ex-abr', 'ed-ex-fps']) {
+  $('#' + id).addEventListener('input', () => readExportForm(id));
 }
+for (const id of ['ed-ex-w', 'ed-ex-h']) $('#' + id).addEventListener('change', () => readExportForm(id));
+$('#ed-ex-lock').onclick = () => {
+  edEnc.lock = !edEnc.lock;
+  store('edExport', edEnc);
+  renderExportForm();
+};
+// Size and frame rate of the first video on the timeline
+$('#ed-ex-match').onclick = () => {
+  const c = ed.p.clips.filter(x => x.track[0] === 'V').sort((a, b) => a.start - b.start).find(x => { const m = edMedia(x.media); return m && m.video && !m.image; });
+  const m = c && edMedia(c.media);
+  if (!m) {
+    toast('На таймлайне нет видео.');
+    return;
+  }
+  edCommit();
+  ed.p.w = m.video.w;
+  ed.p.h = m.video.h;
+  if (m.video.fps) ed.p.fps = m.video.fps;
+  store('edProject', ed.p);
+  renderProjectSettings();
+  renderExportForm();
+};
 $('#ed-ex-cancel').onclick = () => $('#ed-ex-dlg').close();
 
 let edJob = null;

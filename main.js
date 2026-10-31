@@ -518,6 +518,69 @@ ipcMain.handle('library-scan', (_e, folders) => folders.map(dir => ({
 
 ipcMain.handle('library-thumb', (_e, file) => withThumbSlot(() => libraryThumb(file)));
 
+// ---------- waveform of one audio track, for the trim panel
+//
+// ffmpeg decodes the track to 2000 Hz mono; the loudest sample of each of `points` slices is
+// kept. Big recordings take a while to read, so partial results are sent as they come in;
+// the finished waveform is cached on disk next to the thumbnails.
+
+const WAVE_RATE = 2000;
+const waveJobs = new Map(); // id -> ffmpeg process
+
+ipcMain.handle('waveform', async (e, { id, file, index, points }) => {
+  const sender = e.sender;
+  const st = fs.statSync(file);
+  const key = crypto.createHash('sha1').update([file, st.size, st.mtimeMs, index, points, 'wave1'].join('|')).digest('hex').slice(0, 16);
+  const cacheFile = path.join(thumbDir(), key + '.wave.json');
+  if (fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  const info = await probe(file);
+  const total = Math.max(1, (parseFloat(info.format.duration) || 1) * WAVE_RATE);
+  const per = total / points;
+  const peaks = new Array(points).fill(0);
+  return new Promise((resolve, reject) => {
+    const proc = spawn(FFMPEG, ['-v', 'error', '-i', file, '-map', `0:${index}`, '-vn', '-sn', '-dn', '-ac', '1', '-ar', String(WAVE_RATE), '-f', 's16le', 'pipe:1'], { windowsHide: true });
+    waveJobs.set(id, proc);
+    let n = 0;
+    let odd = null; // a byte left over from the previous chunk
+    let lastSent = 0;
+    proc.stdout.on('data', chunk => {
+      if (odd) {
+        chunk = Buffer.concat([odd, chunk]);
+        odd = null;
+      }
+      const end = chunk.length - (chunk.length % 2);
+      if (end < chunk.length) odd = chunk.subarray(end);
+      for (let i = 0; i < end; i += 2) {
+        const v = Math.abs(chunk.readInt16LE(i)) / 32768;
+        const b = Math.min(points - 1, Math.floor(n++ / per));
+        if (v > peaks[b]) peaks[b] = v;
+      }
+      if (Date.now() - lastSent > 500 && !sender.isDestroyed()) {
+        lastSent = Date.now();
+        sender.send('waveform-progress', { id, peaks, done: Math.min(1, n / total) });
+      }
+    });
+    proc.on('error', reject);
+    proc.on('close', code => {
+      waveJobs.delete(id);
+      if (proc.cancelled) return reject(new Error('Отменено'));
+      if (code !== 0 && !n) return reject(new Error('не удалось прочитать звук'));
+      try {
+        fs.mkdirSync(thumbDir(), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify(peaks));
+      } catch {}
+      resolve(peaks);
+    });
+  });
+});
+
+ipcMain.on('waveform-cancel', (_e, id) => {
+  const p = waveJobs.get(id);
+  if (!p) return;
+  p.cancelled = true;
+  p.kill();
+});
+
 // ---------- files in the library: recycle bin, renaming, durations for sorting
 
 ipcMain.handle('trash-file', async (_e, file) => {

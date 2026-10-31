@@ -651,7 +651,20 @@ button.icon.xs { width: 26px; height: 26px; font-size: 19px; line-height: 1; pad
 #strip-frames .sf { flex: 1; min-width: 0; background: #14161e; border-right: 1px solid rgba(0, 0, 0, .45); }
 #strip-frames img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .35s; }
 #strip-frames img.show { opacity: 1; }
-#strip-frames.audio { background: repeating-linear-gradient(90deg, rgba(var(--accent-rgb), .35) 0 2px, transparent 2px 7px) center / 100% 55% no-repeat, #0e0f15; }
+#strip-frames.audio { background: #0e0f15; }
+/* the waveform sits on the lower part of the strip over the frames; audio files get the whole height */
+#strip-wave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 55%;
+  pointer-events: none;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .6));
+}
+body.audio-only #strip-wave { height: 100%; border-radius: 10px; background: none; }
 .strip-shade { position: absolute; top: 0; bottom: 0; background: rgba(8, 9, 13, .74); pointer-events: none; }
 .strip-shade.left { left: 0; border-radius: 10px 0 0 10px; }
 .strip-shade.right { right: 0; border-radius: 0 10px 10px 0; }

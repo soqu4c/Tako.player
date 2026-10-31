@@ -365,6 +365,7 @@ function setTrimOpen(open) {
     if (document.body.classList.contains('ctl-mini')) setCollapsed(false);
     if (!selRange()) selectAll();
     loadStrip();
+    loadWave();
   } else {
     resetTrim();
   }
@@ -422,7 +423,82 @@ async function loadStrip() {
     }
   }
 }
-new ResizeObserver(() => loadStrip()).observe(strip);
+new ResizeObserver(() => {
+  loadStrip();
+  drawWave();
+}).observe(strip);
+
+// ---- waveform of the current audio track under the film strip
+
+const WAVE_POINTS = 1200;
+const wave = { key: null, id: null, peaks: null, done: 0 };
+const waveCanvas = $('#strip-wave');
+
+function drawWave() {
+  const c = waveCanvas;
+  const w = c.clientWidth;
+  const h = c.clientHeight;
+  if (!w || !h) return;
+  const dpr = devicePixelRatio || 1;
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(h * dpr);
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  const peaks = wave.peaks;
+  if (!peaks) return;
+  // Louder recordings fill the height; quiet ones are scaled up to stay readable
+  const top = Math.max(0.05, ...peaks);
+  const cols = Math.min(c.width, peaks.length);
+  const mid = c.height / 2;
+  ctx.fillStyle = 'rgba(255, 255, 255, .85)';
+  for (let x = 0; x < cols; x++) {
+    const from = Math.floor(x * peaks.length / cols);
+    const to = Math.max(from + 1, Math.floor((x + 1) * peaks.length / cols));
+    let v = 0;
+    for (let i = from; i < to; i++) if (peaks[i] > v) v = peaks[i];
+    const bar = Math.max(1, (v / top) * mid * 0.92);
+    const px = x * c.width / cols;
+    ctx.fillRect(px, mid - bar, Math.max(1, c.width / cols - 0.5), bar * 2);
+  }
+}
+
+async function loadWave() {
+  const item = currentItem();
+  const s = state.audioStreams[state.audioK];
+  if (!item || !s || !trimOpen()) return;
+  const key = `${item.path}|${s.index}`;
+  if (wave.key === key) return;
+  if (wave.id) api.waveformCancel(wave.id);
+  const id = newJob();
+  Object.assign(wave, { key, id, peaks: null, done: 0 });
+  drawWave();
+  strip.classList.add('wave-loading');
+  try {
+    const peaks = await api.waveform({ id, file: item.path, index: s.index, points: WAVE_POINTS });
+    if (wave.id !== id) return;
+    wave.peaks = peaks;
+    wave.done = 1;
+    drawWave();
+  } catch {
+    if (wave.id === id) wave.key = null; // try again next time the panel opens
+  } finally {
+    if (wave.id === id) strip.classList.remove('wave-loading');
+  }
+}
+
+api.onWaveformProgress(({ id, peaks, done }) => {
+  if (id !== wave.id) return;
+  wave.peaks = peaks;
+  wave.done = done;
+  drawWave();
+});
+
+// Another audio track shows its own waveform
+const selectAudioBeforeWave = selectAudio;
+selectAudio = (...args) => {
+  selectAudioBeforeWave(...args);
+  loadWave();
+};
 
 function seekTo(t) {
   video.currentTime = clamp(t, 0, duration());

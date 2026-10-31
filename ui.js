@@ -1956,6 +1956,7 @@ function renderMarkerList() {
     const c = n();
     $('#mk-export').textContent = c ? `Сохранить ${c} ${plural(c, 'клип', 'клипа', 'клипов')}…` : 'Сохранить клипы…';
     $('#mk-export').disabled = !c || !!mk.running;
+    $('#mk-concat').disabled = c < 2 || !!mk.running;
   };
   box.onchange = sync;
   sync();
@@ -2045,6 +2046,44 @@ api.onProgress(({ jobId, value }) => {
 $('#mk-export').onclick = async () => {
   const folder = await api.pickFolder();
   if (folder) exportMarkers(folder);
+};
+
+// The ticked fragments glued into one video at `out`
+async function concatMarkers(out) {
+  const item = currentItem();
+  const ranges = [...document.querySelectorAll('#mk-list input:checked')].map(c => clipRange(Number(c.dataset.t)));
+  if (!item || ranges.length < 2 || !out) return null;
+  const mix = $('#mk-audio').value === 'mix' && state.audioStreams.length > 1;
+  const audio = mix ? state.audioStreams.map(s => s.index) : state.audioStreams[state.audioK] ? [state.audioStreams[state.audioK].index] : [];
+  const jobId = newJob();
+  mk.running = jobId;
+  mk.step = 'Склеиваю ролик';
+  $('#mk-progress').hidden = false;
+  $('#mk-bar').style.width = '0%';
+  $('#mk-status').textContent = mk.step + '…';
+  $('#mk-export').disabled = $('#mk-concat').disabled = $('#mk-clear').disabled = true;
+  $('#mk-close').textContent = 'Остановить';
+  let res = null;
+  try {
+    res = await api.concatClips({ jobId, file: item.path, out, ranges, audio });
+    $('#mk-status').textContent = `Готово: ${res.parts} ${plural(res.parts, 'фрагмент', 'фрагмента', 'фрагментов')} в одном ролике`;
+    $('#mk-bar').style.width = '100%';
+    toast('Ролик склеен: ' + api.basename(res.out), 'Показать в папке', () => api.reveal(res.out));
+  } catch (e) {
+    const msg = cleanErr(e);
+    $('#mk-status').textContent = msg === 'Отменено' ? 'Остановлено' : 'Ошибка: ' + msg;
+  } finally {
+    mk.running = null;
+    $('#mk-close').textContent = 'Закрыть';
+    renderMarkerList();
+  }
+  return res;
+}
+
+$('#mk-concat').onclick = async () => {
+  const item = currentItem();
+  const out = await api.saveDialog({ source: item.path, ext: 'mp4', name: item.name.replace(/\.[^.]+$/, '') + ' — нарезка' });
+  if (out) concatMarkers(out);
 };
 $('#btn-markers').onclick = openMarkers;
 

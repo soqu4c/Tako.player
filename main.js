@@ -757,9 +757,9 @@ ipcMain.handle('copy-image', (_e, data) => {
   clipboard.writeImage(nativeImage.createFromDataURL(data));
 });
 
-ipcMain.handle('save-dialog', async (_e, { source, ext }) => {
+ipcMain.handle('save-dialog', async (_e, { source, ext, name }) => {
   const r = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(path.dirname(source), `${path.parse(source).name}_фрагмент.${ext}`),
+    defaultPath: path.join(path.dirname(source), `${name || path.parse(source).name + '_фрагмент'}.${ext}`),
     filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
   });
   return r.canceled || !r.filePath ? null : r.filePath;
@@ -831,6 +831,57 @@ ipcMain.handle('export', async (_e, o) => {
 
   await run(FFMPEG, args, { jobId: o.jobId, duration: end - start });
   return o.out;
+});
+
+// Several fragments of one file glued into one video, in time order. Overlapping fragments
+// are merged so nothing plays twice. Each fragment is a separate fast-seeking input; audio is
+// brought to 48 kHz stereo (and mixed when several tracks are asked for) before concat.
+function mergeRanges(ranges) {
+  const out = [];
+  for (const [a, b] of [...ranges].sort((x, y) => x[0] - y[0])) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out.filter(([a, b]) => b - a > 0.05);
+}
+
+ipcMain.handle('concat-clips', async (_e, o) => {
+  if (path.resolve(o.out).toLowerCase() === path.resolve(o.file).toLowerCase()) {
+    throw new Error('Нельзя сохранить поверх исходного файла');
+  }
+  const info = await probe(o.file);
+  const v = realVideo(info);
+  const ranges = mergeRanges(o.ranges);
+  if (!ranges.length) throw new Error('нет фрагментов');
+  const audio = o.audio || [];
+  const args = [...FF_BASE];
+  for (const [a, b] of ranges) args.push('-ss', a.toFixed(3), '-t', (b - a).toFixed(3), '-i', o.file);
+  const fmtA = 'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo';
+  const filters = [];
+  const parts = ranges.map((_, k) => {
+    let seg = '';
+    if (v) {
+      filters.push(`[${k}:${v.index}]setpts=PTS-STARTPTS,format=yuv420p[v${k}]`);
+      seg += `[v${k}]`;
+    }
+    if (audio.length > 1) {
+      audio.forEach((i, j) => filters.push(`[${k}:${i}]${fmtA}[a${k}_${j}]`));
+      filters.push(`${audio.map((_, j) => `[a${k}_${j}]`).join('')}amix=inputs=${audio.length}:normalize=0,alimiter=limit=0.95:level=0,asetpts=PTS-STARTPTS[a${k}]`);
+      seg += `[a${k}]`;
+    } else if (audio.length) {
+      filters.push(`[${k}:${audio[0]}]${fmtA},asetpts=PTS-STARTPTS[a${k}]`);
+      seg += `[a${k}]`;
+    }
+    return seg;
+  });
+  filters.push(`${parts.join('')}concat=n=${ranges.length}:v=${v ? 1 : 0}:a=${audio.length ? 1 : 0}${v ? '[v]' : ''}${audio.length ? '[a]' : ''}`);
+  args.push('-filter_complex', filters.join(';'));
+  if (v) args.push('-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(o.crf || 21), '-pix_fmt', 'yuv420p');
+  if (audio.length) args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '192k');
+  args.push('-movflags', '+faststart', o.out);
+  await run(FFMPEG, args, { jobId: o.jobId, duration: ranges.reduce((s, [a, b]) => s + b - a, 0) });
+  return { out: o.out, parts: ranges.length };
 });
 
 // Streams one audio track from `start` as fragmented AAC for Media Source Extensions,

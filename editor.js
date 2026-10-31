@@ -1087,6 +1087,22 @@ function dragTitle(e, c, d) {
 // type, with a reset arrow. Several selected clips change together.
 const fxOpen = recall('edFxOpen', { motion: true, opacity: true, volume: true, text: true, source: true });
 
+// The chain between Position X and Y, as Premiere's link for width and height
+ed.posLink = recall('edPosLink', false);
+function posLinkRow(rows) {
+  const b = document.createElement('button');
+  b.className = 'fx-link';
+  b.classList.toggle('on', ed.posLink);
+  b.title = ed.posLink ? 'X и Y связаны: меняете одно — так же меняется другое. Нажмите, чтобы развязать' : 'Связать X и Y: двигать оба одним ползунком';
+  b.innerHTML = '<svg class="i"><use href="#i-link"/></svg>';
+  b.onclick = () => {
+    ed.posLink = !ed.posLink;
+    store('edPosLink', ed.posLink);
+    renderInspector();
+  };
+  rows.append(b);
+}
+
 function renderInspector() {
   const body = $('#ed-insp-body');
   body.innerHTML = '';
@@ -1147,10 +1163,12 @@ function renderInspector() {
     const num = row.querySelector('.fx-num');
     const paint = () => { num.textContent = show ? show(get(c)) : String(Math.round(get(c) / step) * step).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); };
     paint();
+    num.paint = paint;
     const apply = v => {
       v = clamp(v, min, max);
       for (const x of list) set(x, v);
-      paint();
+      // a linked value may have moved another one too
+      body.querySelectorAll('.fx-num').forEach(n => n.paint && n.paint());
       store('edProject', ed.p);
       syncPreview(true);
     };
@@ -1206,8 +1224,10 @@ function renderInspector() {
     const p = pics.length ? pics : [c];
     const v = p[0];
     section('motion', 'Движение', rows => {
-      value(rows, 'Положение X', x => motion(x).x, (x, n) => { x.posX = n; }, { step: 1, def: ed.p.w / 2, list: p });
-      value(rows, 'Положение Y', x => motion(x).y, (x, n) => { x.posY = n; }, { step: 1, def: ed.p.h / 2, list: p });
+      // with the link on, X and Y move by the same amount
+      value(rows, 'Положение X', x => motion(x).x, (x, n) => { const d = n - motion(x).x; x.posX = n; if (ed.posLink) x.posY = motion(x).y + d; }, { step: 1, def: ed.p.w / 2, list: p });
+      posLinkRow(rows);
+      value(rows, 'Положение Y', x => motion(x).y, (x, n) => { const d = n - motion(x).y; x.posY = n; if (ed.posLink) x.posX = motion(x).x + d; }, { step: 1, def: ed.p.h / 2, list: p });
       value(rows, 'Масштаб', x => motion(x).scale, (x, n) => { x.scale = n; }, { min: 1, max: 1000, step: 1, unit: '%', def: 100, list: p });
       value(rows, 'Поворот', x => motion(x).rot, (x, n) => { x.rot = n; }, { min: -3600, max: 3600, step: 1, unit: '°', def: 0, list: p });
     }, () => p.forEach(x => { x.posX = x.posY = x.scale = null; x.rot = 0; }));
@@ -1230,8 +1250,9 @@ function renderInspector() {
       ta.onchange = () => renderTimeline();
       rows.append(ta);
       value(rows, 'Размер', x => x.size, (x, n) => { x.size = n; }, { min: 8, max: 400, step: 1, unit: 'px', def: 72 });
-      value(rows, 'Положение X', x => titleXY(x)[0] * ed.p.w, (x, n) => { x.x = n / ed.p.w; x.y = titleXY(x)[1]; }, { step: 1, def: ed.p.w / 2 });
-      value(rows, 'Положение Y', x => titleXY(x)[1] * ed.p.h, (x, n) => { x.y = n / ed.p.h; x.x = titleXY(x)[0]; }, { step: 1, def: ed.p.h * 0.85 });
+      value(rows, 'Положение X', x => titleXY(x)[0] * ed.p.w, (x, n) => { const [cx, cy] = titleXY(x); const d = n - cx * ed.p.w; x.x = n / ed.p.w; x.y = ed.posLink ? cy + d / ed.p.h : cy; }, { step: 1, def: ed.p.w / 2 });
+      posLinkRow(rows);
+      value(rows, 'Положение Y', x => titleXY(x)[1] * ed.p.h, (x, n) => { const [cx, cy] = titleXY(x); const d = n - cy * ed.p.h; x.y = n / ed.p.h; x.x = ed.posLink ? cx + d / ed.p.w : cx; }, { step: 1, def: ed.p.h * 0.85 });
       value(rows, 'Появление', x => x.fadeIn || 0, (x, n) => { x.fadeIn = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
       value(rows, 'Исчезание', x => x.fadeOut || 0, (x, n) => { x.fadeOut = Math.min(n, clipDur(x) / 2); }, { min: 0, step: 0.1, unit: 'с', def: 0 });
       const colors = document.createElement('div');

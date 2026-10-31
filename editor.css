@@ -461,3 +461,7 @@ body.fx-scrub, body.fx-scrub * { cursor: ew-resize !important; }
 .ed-vsplit::after { content: ""; position: absolute; top: 50%; left: 2px; height: 40px; width: 2px; margin-top: -20px; border-radius: 2px; background: #34353d; }
 .ed-vsplit:hover::after, .ed-vsplit.drag::after { background: #4c9bff; }
 body.ed-resizing, body.ed-resizing * { user-select: none; }
+.fx-link { display: block; margin: -3px 0 -3px -22px; width: 18px; height: 18px; border-radius: 4px; color: var(--muted); opacity: .6; }
+.fx-link .i { width: 13px; height: 13px; }
+.fx-link:hover { opacity: 1; background: rgba(255, 255, 255, .06); }
+.fx-link.on { color: #4c9bff; opacity: 1; }

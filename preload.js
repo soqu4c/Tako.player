@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   libraryScan: folders => ipcRenderer.invoke('library-scan', folders),
   libraryThumb: file => ipcRenderer.invoke('library-thumb', file),
   trashFile: file => ipcRenderer.invoke('trash-file', file),
+  removeStream: opts => ipcRenderer.invoke('remove-stream', opts),
   renameFile: opts => ipcRenderer.invoke('rename-file', opts),
   libraryDurations: files => ipcRenderer.invoke('library-durations', files),
   waveform: opts => ipcRenderer.invoke('waveform', opts),

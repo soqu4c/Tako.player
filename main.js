@@ -589,6 +589,36 @@ ipcMain.on('waveform-cancel', (_e, id) => {
   p.kill();
 });
 
+// ---------- removing an audio or subtitle track from a file
+//
+// The file is rewritten without that stream (no re-encoding) next to itself; then the
+// original goes to the recycle bin and the new file takes its name.
+
+ipcMain.handle('remove-stream', async (_e, { file, index, jobId }) => {
+  const info = await probe(file);
+  const s = info.streams.find(x => x.index === index);
+  if (!s || !['audio', 'subtitle'].includes(s.codec_type)) throw new Error('эту дорожку удалить нельзя');
+  const size = fs.statSync(file).size;
+  let free = Infinity;
+  try {
+    const d = fs.statfsSync(path.dirname(file));
+    free = d.bavail * d.bsize;
+  } catch {}
+  if (free < size + 200e6) throw new Error(`на диске не хватает места: на время пересборки нужно около ${(size / 1e9).toFixed(1)} ГБ свободных`);
+  const { dir, name, ext } = path.parse(file);
+  const tmp = path.join(dir, `${name}.tako-tmp${ext}`);
+  try {
+    await run(FFMPEG, [...FF_BASE, '-i', file, '-map', '0', '-map', `-0:${index}`, '-map', '-0:d?', '-c', 'copy',
+      '-map_metadata', '0', '-map_chapters', '0', tmp], { jobId, duration: parseFloat(info.format.duration) || 0 });
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+  await shell.trashItem(file);
+  fs.renameSync(tmp, file);
+  return file;
+});
+
 // ---------- files in the library: recycle bin, renaming, durations for sorting
 
 ipcMain.handle('trash-file', async (_e, file) => {

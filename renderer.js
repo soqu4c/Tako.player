@@ -725,8 +725,64 @@ function nameRow(s, k, kind) {
   input.value = state.names[s.index] || '';
   input.placeholder = ownTitle(s) || preset ? `Сейчас: ${ownTitle(s) || preset}` : 'Например: Игра, Микрофон, Дискорд…';
   input.spellcheck = false;
-  row.append(cap, input);
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'icon sm name-del';
+  del.title = 'Удалить эту дорожку из файла';
+  del.innerHTML = '<svg class="i"><use href="#i-trash"/></svg>';
+  del.onclick = e => {
+    e.preventDefault();
+    removeTrack(s, k);
+  };
+  const line = document.createElement('div');
+  line.className = 'name-line';
+  line.append(input, del);
+  row.append(cap, line);
   return row;
+}
+
+// Track names are kept by stream index, so after a stream is removed the later ones move up
+function shiftTrackNames(file, removed) {
+  const all = recall('trackNames', {});
+  const names = all[file];
+  if (!names) return;
+  const next = {};
+  for (const [i, v] of Object.entries(names)) {
+    const n = Number(i);
+    if (n < removed) next[n] = v;
+    else if (n > removed) next[n - 1] = v;
+  }
+  if (Object.keys(next).length) all[file] = next;
+  else delete all[file];
+  store('trackNames', all);
+}
+
+// Rewrites the file without one audio or subtitle track; the original goes to the recycle bin
+async function removeTrack(s, k) {
+  const item = currentItem();
+  if (!item) return;
+  const file = item.path;
+  const what = s.codec_type === 'audio' ? 'Аудиодорожка' : 'Субтитры';
+  $('#names-dlg').close();
+  const ok = await confirmDialog('Удалить дорожку из файла?',
+    `${what} «${streamLabel(s, k)}» будет удалена из «${item.name}». Файл пересоберётся без перекодирования, а исходный уйдёт в корзину Windows — оттуда его можно вернуть.`,
+    'Удалить дорожку');
+  if (!ok) return;
+  savePosition();
+  closeVideo();
+  const jobId = newJob();
+  showBusy('Удаляю дорожку из файла…', jobId);
+  try {
+    await api.removeStream({ file, index: s.index, jobId });
+    shiftTrackNames(file, s.index);
+    toast('Дорожка удалена. Исходный файл — в корзине');
+  } catch (e) {
+    const msg = cleanErr(e);
+    if (msg !== 'Отменено') toast('Не удалось удалить дорожку: ' + msg);
+  } finally {
+    hideBusy();
+    addFiles([file]);
+  }
 }
 
 function openNames() {

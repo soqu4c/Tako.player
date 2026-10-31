@@ -1194,6 +1194,10 @@ dialog h2 { margin: 0 0 18px; font-size: 19px; font-weight: 700; }
 .obs-info b { color: var(--text); }
 .obs-info ol { margin: 6px 0 0; padding-left: 20px; }
 .obs-info small { color: var(--muted); }
+.name-line { display: flex; align-items: center; gap: 6px; }
+.name-line input { flex: 1; min-width: 0; }
+.name-del { color: var(--muted); }
+.name-del:hover { color: var(--danger) !important; background: rgba(255, 92, 108, .12) !important; }
 .name-row { display: flex; flex-direction: column; gap: 5px; }
 .name-row span { color: var(--soft); font-size: 12px; }
 .name-row input, .text-input {

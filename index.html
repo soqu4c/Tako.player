@@ -145,7 +145,7 @@
             </div>
             <div class="group right">
               <label class="pick" title="Аудиодорожка (A)"><svg class="i"><use href="#i-audio"/></svg><select id="audio-select"><option>—</option></select></label>
-              <button id="btn-names" class="icon sm" title="Подписать дорожки (N)"><svg class="i"><use href="#i-edit"/></svg></button>
+              <button id="btn-names" class="icon sm" title="Дорожки: подписать или удалить из файла (N)"><svg class="i"><use href="#i-edit"/></svg></button>
               <label class="pick" title="Субтитры (S)"><svg class="i"><use href="#i-cc"/></svg><select id="sub-select"><option value="off">Выкл</option></select></label>
               <select id="speed" class="chip" title="Скорость ( [ и ] )">
                 <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option>
@@ -426,8 +426,8 @@
 </div>
 
 <dialog id="names-dlg">
-  <h2>Названия дорожек</h2>
-  <p class="hint">Названия запоминаются для этого файла и записываются в сохранённые фрагменты. Пустое поле — название по умолчанию.</p>
+  <h2>Дорожки</h2>
+  <p class="hint">Названия запоминаются для этого файла и записываются в сохранённые фрагменты. Пустое поле — название по умолчанию. Корзина справа удаляет дорожку из самого файла.</p>
   <div id="names-list"></div>
   <label id="names-all-row" class="names-all"><input type="checkbox" id="names-all"> Применять названия аудиодорожек ко всем файлам
     <small>По номеру дорожки — удобно, если вы всегда записываете одинаково, например 1 — игра, 2 — микрофон. Названия, записанные в самом файле, важнее.</small></label>
@@ -455,7 +455,7 @@
     <tr><td><kbd>M</kbd></td><td>Без звука</td></tr>
     <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Медленнее / быстрее</td></tr>
     <tr><td><kbd>A</kbd> <kbd>S</kbd></td><td>Следующая аудиодорожка / субтитры</td></tr>
-    <tr><td><kbd>N</kbd></td><td>Подписать дорожки</td></tr>
+    <tr><td><kbd>N</kbd></td><td>Дорожки: подписать или удалить из файла</td></tr>
     <tr><td><kbd>T</kbd></td><td>Открыть / закрыть обрезку</td></tr>
     <tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Начало / конец фрагмента на текущем моменте</td></tr>
     <tr><td><kbd>P</kbd></td><td>Проиграть фрагмент</td></tr>

@@ -199,12 +199,14 @@ async function addFiles(paths) {
       start = i;
     }
   }
-  playList(list, start);
+  // Only a list the user opened on purpose (a folder, several files) plays on by itself
+  playList(list, start, media.length > 1);
   if (media.length > 1) osd(`Открыто файлов: ${media.length}`);
 }
 
-function playList(paths, start) {
+function playList(paths, start, playOn = false) {
   state.playlist = paths.map(p => ({ path: p, name: api.basename(p) }));
+  state.playOn = playOn;
   state.current = -1;
   renderPlaylist();
   loadIndex(start);
@@ -229,6 +231,7 @@ function closeVideo() {
   if (!state.info) return;
   if (document.fullscreenElement) document.exitFullscreen();
   state.playlist = [];
+  state.playOn = false;
   state.current = -1;
   unload();
   renderPlaylist();
@@ -344,6 +347,7 @@ function setSource(file, time, play) {
     pendingMeta = null;
     if (time > 0) video.currentTime = time;
     state.loadedPath = owner;
+    state.startedAt = performance.now();
     sourceReady();
     video.playbackRate = video.defaultPlaybackRate = Number($('#speed').value);
     if (play) video.play().catch(() => {});
@@ -965,7 +969,9 @@ video.addEventListener('ended', () => {
     const r = selRange();
     video.currentTime = r ? r[0] : 0;
     video.play();
-  } else if (settings.autoNext && state.current < state.playlist.length - 1) {
+  } else if (settings.autoNext && state.playOn && state.current < state.playlist.length - 1
+    && performance.now() - state.startedAt > 3000) {
+    // The time check stops a run of broken or empty files from flipping through by itself
     loadIndex(state.current + 1);
   }
 });

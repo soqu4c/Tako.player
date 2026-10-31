@@ -74,7 +74,7 @@ const SETTING_TABS = [
     id: 'play', title: 'Воспроизведение', icon: 'i-play', rows: [
       { key: 'resume', type: 'toggle', label: 'Продолжать с места остановки', hint: 'Плеер помнит, где вы остановились, в 200 последних файлах' },
       { key: 'autoplay', type: 'toggle', label: 'Сразу начинать воспроизведение', hint: 'Иначе файл откроется на паузе' },
-      { key: 'autoNext', type: 'toggle', label: 'Включать следующий файл из открытой папки' },
+      { key: 'autoNext', type: 'toggle', label: 'Включать следующий файл в открытой папке', hint: 'Когда вы открыли целую папку или несколько файлов. Одиночное видео в конце просто останавливается' },
       { key: 'seekStep', type: 'segment', label: 'Перемотка стрелками ← →', options: [[5, '5 с'], [10, '10 с'], [15, '15 с'], [30, '30 с']] },
     ],
   },
@@ -358,6 +358,7 @@ function setTrimOpen(open) {
   if (open && !state.info) return;
   document.body.classList.toggle('trim-open', open);
   if (open) {
+    if (document.body.classList.contains('ctl-mini')) setCollapsed(false);
     if (!selRange()) selectAll();
     loadStrip();
   } else {

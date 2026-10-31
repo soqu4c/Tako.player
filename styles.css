@@ -484,6 +484,9 @@ body.idle #controls, body:not(.loaded) #controls { opacity: 0; transform: transl
 body.ctl-mini .collapse .i { transform: rotate(180deg); }
 body.ctl-mini .row.main { display: none; }
 body.ctl-mini #controls { padding: 2px 12px 3px; }
+/* folding also tucks the trim panel away; the selection itself stays */
+body.ctl-mini.trim-open #trim-wrap { grid-template-rows: 0fr; }
+body.ctl-mini.trim-open .trim-panel { margin-top: 0; padding: 0 8px; border-color: transparent; }
 @container (max-width: 800px) {
   #speed, .divider { display: none; }
   .pick { min-width: 64px; }

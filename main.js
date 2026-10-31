@@ -320,12 +320,14 @@ setInterval(() => rpcConnect(), 30000);
 
 ipcMain.on('discord-activity', (_e, { enabled, activity }) => {
   rpcEnabled = !!enabled;
-  rpcActivity = rpcEnabled ? activity : null;
+  // Friends see a button under the status that leads to the latest installer
+  rpcActivity = rpcEnabled && activity ? { ...activity, buttons: [{ label: L('Скачать Tako.player', 'Download Tako.player'), url: DOWNLOAD_URL }] } : null;
   if (!rpc) rpcConnect();
   else rpcPush();
 });
 
 const PROJECT_URL = 'https://github.com/soqu4c/Tako.player';
+const DOWNLOAD_URL = 'https://github.com/soqu4c/Tako.player/releases/latest';
 const DONATE_URL = 'https://www.donationalerts.com/r/whytakao';
 ipcMain.handle('open-project', () => shell.openExternal(PROJECT_URL));
 ipcMain.handle('open-donate', () => shell.openExternal(DONATE_URL));

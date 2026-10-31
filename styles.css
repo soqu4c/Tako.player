@@ -487,6 +487,9 @@ body.ctl-mini #controls { padding: 2px 12px 3px; }
 /* folding also tucks the trim panel away; the selection itself stays */
 body.ctl-mini.trim-open #trim-wrap { grid-template-rows: 0fr; }
 body.ctl-mini.trim-open .trim-panel { margin-top: 0; padding: 0 8px; border-color: transparent; }
+/* in the folded panel the fragment is just a tint on the thin timeline */
+body.ctl-mini #sel { top: 0; bottom: 0; border: none; border-radius: 3px; background: rgba(var(--accent-rgb), .45); }
+body.ctl-mini .flag { display: none; }
 @container (max-width: 800px) {
   #speed, .divider { display: none; }
   .pick { min-width: 64px; }
@@ -786,6 +789,41 @@ body.drawing #controls { display: none; }
 .lib-section-head button.icon { opacity: 0; }
 .lib-section:hover .lib-section-head button.icon { opacity: 1; }
 .lib-missing { color: var(--danger); font-size: 12px; }
+.folder-tabs { display: flex; gap: 6px; padding: 0 28px 14px; overflow-x: auto; flex: none; scrollbar-width: thin; }
+.folder-tab {
+  flex: none;
+  gap: 8px;
+  padding: 6px 8px 6px 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: var(--soft);
+  font-weight: 500;
+  max-width: 260px;
+}
+.folder-tab span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.folder-tab .n { font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, .08); color: var(--muted); padding: 1px 7px; border-radius: 999px; }
+.folder-tab:hover { background: rgba(255, 255, 255, .09); color: var(--text); }
+.folder-tab.on { background: var(--accent-soft); color: #fff; box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .45); }
+.folder-tab.on .n { background: var(--accent); color: #fff; }
+.lib-section-head h2.link { cursor: pointer; transition: color .15s; }
+.lib-section-head h2.link:hover { color: var(--accent); }
+.lib-sub { display: flex; align-items: center; gap: 8px; margin: 20px 0 12px; font-size: 13.5px; font-weight: 600; color: var(--soft); }
+.lib-sub .i { width: 16px; height: 16px; color: var(--accent); }
+.lib-sub small { color: var(--muted); font-weight: 500; background: rgba(255, 255, 255, .06); padding: 1px 8px; border-radius: 999px; }
+.more-card {
+  flex-direction: column;
+  gap: 4px;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px dashed var(--line-2);
+  background: rgba(255, 255, 255, .03);
+  color: var(--soft);
+  align-self: start;
+}
+.more-card .i { width: 22px; height: 22px; color: var(--accent); margin-bottom: 2px; }
+.more-card span { color: var(--muted); font-size: 12px; }
+.more-card:hover { border-color: rgba(var(--accent-rgb), .6); background: var(--accent-soft); color: #fff; transform: translateY(-3px); }
 .lib-none { color: var(--muted); padding: 30px 0; grid-column: 1 / -1; text-align: center; }
 #lib-refresh.spin .i { animation: spin .8s linear infinite; }
 

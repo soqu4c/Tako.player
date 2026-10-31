@@ -746,6 +746,7 @@ const lib = {
   data: [],
   filter: recall('libFilter', 'all'),
   sort: recall('libSort', 'name'),
+  folder: recall('libFolder', 'all'), // 'all' or the folder shown on its own
   query: '',
   loaded: false,
 };
@@ -770,17 +771,68 @@ function playFrom(files, i) {
   playList(files.map(f => f.path), i);
 }
 
+const PREVIEW_CARDS = 10; // cards per folder on the "all folders" tab
+
+// Which subfolder of the library folder a file sits in ('' for the folder itself)
+function subfolderOf(sec, f) {
+  const rel = f.path.slice(sec.dir.length).replace(/^[\\/]+/, '');
+  return rel.includes('\\') ? rel.slice(0, rel.lastIndexOf('\\')) : '';
+}
+
+function openLibFolder(dir) {
+  lib.folder = dir;
+  store('libFolder', dir);
+  renderLibrary();
+  $('#lib-body').scrollTop = 0;
+}
+
+// Tabs to look at one folder at a time once there are several
+function renderFolderTabs(counts) {
+  const box = $('#lib-folders');
+  box.innerHTML = '';
+  box.hidden = lib.data.length < 2;
+  if (box.hidden) return;
+  const tab = (dir, name, n) => {
+    const b = document.createElement('button');
+    b.className = 'folder-tab';
+    b.classList.toggle('on', lib.folder === dir);
+    b.title = dir === 'all' ? 'Все папки библиотеки' : dir;
+    const label = document.createElement('span');
+    label.textContent = name;
+    const count = document.createElement('span');
+    count.className = 'n';
+    count.textContent = n;
+    b.append(label, count);
+    b.onclick = () => openLibFolder(dir);
+    box.append(b);
+  };
+  tab('all', 'Все папки', counts.reduce((a, c) => a + c.n, 0));
+  for (const { sec, n } of counts) tab(sec.dir, sec.name, n);
+}
+
+function libGrid(cards) {
+  const grid = document.createElement('div');
+  grid.className = 'cards';
+  grid.append(...cards);
+  return grid;
+}
+
 function renderLibrary() {
   const body = $('#lib-body');
   body.innerHTML = '';
   const q = lib.query.trim().toLowerCase();
+  if (lib.folder !== 'all' && !lib.data.some(s => s.dir === lib.folder)) lib.folder = 'all';
+  const single = lib.folder !== 'all';
   let total = 0;
   let shown = 0;
+  const counts = [];
   for (const sec of lib.data) {
     total += sec.files.length;
     const files = sec.files
       .filter(f => (lib.filter === 'all' || (lib.filter === 'audio') === f.audio) && (!q || f.name.toLowerCase().includes(q)))
       .sort(SORTS[lib.sort] || SORTS.name);
+    counts.push({ sec, n: files.length });
+    if (single && sec.dir !== lib.folder) continue;
     if (!files.length && (q || lib.filter !== 'all')) continue;
     shown += files.length;
 
@@ -790,6 +842,11 @@ function renderLibrary() {
     head.className = 'lib-section-head';
     const h = document.createElement('h2');
     h.textContent = sec.name;
+    if (!single) {
+      h.className = 'link';
+      h.title = 'Открыть только эту папку';
+      h.onclick = () => openLibFolder(sec.dir);
+    }
     const count = document.createElement('span');
     count.className = 'count';
     count.textContent = files.length;
@@ -807,25 +864,56 @@ function renderLibrary() {
       renderLibrary();
     };
     head.append(h, count, where, rm);
+    section.append(head);
 
-    const grid = document.createElement('div');
-    grid.className = 'cards';
-    files.forEach((f, i) => {
-      // Files from subfolders show which one they are in
-      const rel = f.path.slice(sec.dir.length).replace(/^[\\/]+/, '');
-      const sub = rel.includes('\\') ? rel.slice(0, rel.lastIndexOf('\\')) + ' · ' : '';
-      const meta = `${sub}${fmtSize(f.size)} · ${new Date(f.mtime).toLocaleDateString('ru-RU')}`;
-      grid.append(makeCard(f, meta, () => playFrom(files, i), i));
-    });
+    const card = (f, i) => {
+      const sub = subfolderOf(sec, f);
+      const meta = `${sub && !single ? sub + ' · ' : ''}${fmtSize(f.size)} · ${new Date(f.mtime).toLocaleDateString('ru-RU')}`;
+      return makeCard(f, meta, () => playFrom(files, files.indexOf(f)), i);
+    };
+
     if (!files.length) {
       const none = document.createElement('div');
       none.className = 'lib-none';
       none.textContent = 'В этой папке нет видео и музыки';
-      grid.append(none);
+      section.append(none);
+    } else if (!single) {
+      // A preview of each folder; the rest is one click away
+      const cards = files.slice(0, PREVIEW_CARDS).map(card);
+      if (files.length > PREVIEW_CARDS) {
+        const more = document.createElement('button');
+        more.className = 'more-card';
+        more.innerHTML = '<svg class="i"><use href="#i-grid"/></svg><b></b><span></span>';
+        more.querySelector('b').textContent = 'Показать все';
+        more.querySelector('span').textContent = `${files.length} ${plural(files.length, 'файл', 'файла', 'файлов')}`;
+        more.onclick = () => openLibFolder(sec.dir);
+        cards.push(more);
+      }
+      section.append(libGrid(cards));
+    } else {
+      // One folder: its own files first, then each subfolder under its own heading
+      const groups = new Map();
+      for (const f of files) {
+        const sub = subfolderOf(sec, f);
+        if (!groups.has(sub)) groups.set(sub, []);
+        groups.get(sub).push(f);
+      }
+      const order = [...groups.keys()].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : collatorRu.compare(a, b)));
+      for (const sub of order) {
+        if (groups.size > 1) {
+          const sh = document.createElement('h3');
+          sh.className = 'lib-sub';
+          sh.innerHTML = '<svg class="i"><use href="#i-folder"/></svg><span></span><small></small>';
+          sh.querySelector('span').textContent = sub || 'В самой папке';
+          sh.querySelector('small').textContent = groups.get(sub).length;
+          section.append(sh);
+        }
+        section.append(libGrid(groups.get(sub).map(card)));
+      }
     }
-    section.append(head, grid);
     body.append(section);
   }
+  renderFolderTabs(counts);
   if (lib.folders.length && !shown && (q || lib.filter !== 'all')) {
     const none = document.createElement('div');
     none.className = 'lib-none';
@@ -843,10 +931,14 @@ function renderLibrary() {
 async function addLibraryFolder() {
   const dir = await api.pickFolder();
   if (!dir) return;
-  if (!lib.folders.some(d => d.toLowerCase() === dir.toLowerCase())) {
+  const known = lib.folders.find(d => d.toLowerCase() === dir.toLowerCase());
+  if (!known) {
     lib.folders.push(dir);
     store('libraryFolders', lib.folders);
   }
+  // Show the folder just added (or picked again) on its own tab
+  lib.folder = known || dir;
+  store('libFolder', lib.folder);
   await loadLibrary();
 }
 

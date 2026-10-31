@@ -467,20 +467,20 @@ body.idle #controls, body:not(.loaded) #controls { opacity: 0; transform: transl
 .skip-n { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -42%); font-size: 7.5px; font-weight: 800; line-height: 1; pointer-events: none; }
 
 /* the panel folds down to just the timeline */
+/* sits at the end of the timeline row, which leaves room for it, so trim flags never meet it */
 .collapse {
   position: absolute;
-  right: 16px;
-  top: -11px;
-  width: 30px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-2);
+  right: 8px;
+  top: 3px;
+  width: 26px;
+  height: 22px;
+  border-radius: 8px;
   color: var(--muted);
-  z-index: 2;
+  z-index: 3;
 }
-.collapse .i { width: 14px; height: 14px; transition: transform .3s var(--ease); }
-.collapse:hover { color: #fff; background: var(--surface-3); }
+.collapse .i { width: 15px; height: 15px; transition: transform .3s var(--ease); }
+.collapse:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+#controls #timeline { margin-right: 32px; }
 body.ctl-mini .collapse .i { transform: rotate(180deg); }
 body.ctl-mini .row.main { display: none; }
 body.ctl-mini #controls { padding: 2px 12px 3px; }

@@ -698,6 +698,29 @@ button.icon.xs { width: 26px; height: 26px; font-size: 19px; line-height: 1; pad
 .dash { color: var(--dim); margin: 0 2px; }
 #sel-len { color: var(--accent); margin-left: 8px; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 600; }
 
+/* ---------- zoom */
+
+.zoom-smooth { transition: transform .14s ease-out; }
+body.zoomed #video { cursor: grab; }
+body.zoomed #video:active { cursor: grabbing; }
+#zoom-badge {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 5;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--line-2);
+  backdrop-filter: blur(14px);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: rise .25s var(--ease);
+}
+#zoom-badge:hover { border-color: rgba(var(--accent-rgb), .6); }
+
 /* ---------- drawing on a frame */
 
 #draw-layer { position: absolute; inset: 0; z-index: 3; }

@@ -1454,7 +1454,7 @@ document.addEventListener('click', e => {
 });
 
 const stage = $('#stage');
-stage.addEventListener('click', e => { if (e.target === video) togglePlay(); });
+stage.addEventListener('click', e => { if (e.target === video && !zoom.justPanned) togglePlay(); });
 stage.addEventListener('dblclick', e => { if (e.target === video) toggleFullscreen(); });
 stage.addEventListener('wheel', e => {
   if (!state.info) return;
@@ -1517,6 +1517,7 @@ document.addEventListener('keydown', e => {
       }
     },
     KeyH: toggleCollapse,
+    KeyZ: resetZoom,
     KeyC: screenshot,
     KeyT: toggleTrim,
     KeyD: toggleDraw,
@@ -1532,6 +1533,11 @@ document.addEventListener('keydown', e => {
     KeyI: showInfo,
     KeyL: () => showView(currentView === 'library' ? 'player' : 'library'),
     Comma: openSettings,
+    Equal: () => zoomBy(1.25),
+    NumpadAdd: () => zoomBy(1.25),
+    Minus: () => zoomBy(1 / 1.25),
+    NumpadSubtract: () => zoomBy(1 / 1.25),
+    Digit0: resetZoom,
   };
   const fn = ctrl ? ctrlHandlers[e.code] : handlers[e.code];
   if (!fn) return;

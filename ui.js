@@ -1473,6 +1473,93 @@ window.addEventListener('keydown', e => {
   else if (!ctrl && DRAW_KEYS[e.code]) setDrawTool(DRAW_KEYS[e.code]);
 }, true);
 
+// ---------- zooming into the picture
+//
+// Ctrl+wheel zooms towards the pointer, dragging moves the zoomed picture. The same transform
+// goes on the drawing layer, so drawings stay on the spot they were made on.
+
+const zoom = { k: 1, x: 0, y: 0, pan: null, justPanned: false };
+const ZOOM_MAX = 8;
+
+function applyZoom(smooth = true) {
+  const st = $('#stage').getBoundingClientRect();
+  // Keep the picture covering the stage: it may not be pulled further than its own overhang
+  const mx = st.width * (zoom.k - 1) / 2;
+  const my = st.height * (zoom.k - 1) / 2;
+  zoom.x = clamp(zoom.x, -mx, mx);
+  zoom.y = clamp(zoom.y, -my, my);
+  const tf = zoom.k === 1 ? '' : `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.k})`;
+  for (const el of [video, $('#draw-layer')]) {
+    el.classList.toggle('zoom-smooth', smooth);
+    el.style.transform = tf;
+  }
+  document.body.classList.toggle('zoomed', zoom.k > 1);
+  const badge = $('#zoom-badge');
+  badge.hidden = zoom.k === 1;
+  badge.textContent = `${Math.round(zoom.k * 100)}%  ·  Z — сбросить`;
+}
+
+// Zoom by `factor` keeping the point (cx, cy) of the stage where it is
+function zoomBy(factor, cx, cy) {
+  if (!state.info || !state.videoStream) return;
+  const st = $('#stage').getBoundingClientRect();
+  const mx = (cx ?? st.left + st.width / 2) - (st.left + st.width / 2);
+  const my = (cy ?? st.top + st.height / 2) - (st.top + st.height / 2);
+  const k = clamp(zoom.k * factor, 1, ZOOM_MAX);
+  zoom.x = mx - (mx - zoom.x) * (k / zoom.k);
+  zoom.y = my - (my - zoom.y) * (k / zoom.k);
+  zoom.k = k < 1.02 ? 1 : k;
+  if (zoom.k === 1) zoom.x = zoom.y = 0;
+  applyZoom();
+}
+
+function resetZoom() {
+  if (zoom.k === 1) return;
+  zoom.k = 1;
+  zoom.x = zoom.y = 0;
+  applyZoom();
+}
+
+// Capture phase, so Ctrl+wheel never reaches the volume wheel handler
+$('#stage').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY);
+}, { passive: false, capture: true });
+
+video.addEventListener('pointerdown', e => {
+  if (zoom.k === 1 || e.button !== 0 || draw.on) return;
+  zoom.pan = { sx: e.clientX, sy: e.clientY, x: zoom.x, y: zoom.y, moved: false };
+  video.setPointerCapture(e.pointerId);
+});
+video.addEventListener('pointermove', e => {
+  const p = zoom.pan;
+  if (!p) return;
+  if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 4) p.moved = true;
+  zoom.x = p.x + e.clientX - p.sx;
+  zoom.y = p.y + e.clientY - p.sy;
+  applyZoom(false);
+});
+const endPan = () => {
+  // A drag that moved the picture is not a click on it (no play/pause)
+  if (zoom.pan && zoom.pan.moved) {
+    zoom.justPanned = true;
+    setTimeout(() => { zoom.justPanned = false; });
+  }
+  zoom.pan = null;
+};
+video.addEventListener('pointerup', endPan);
+video.addEventListener('pointercancel', endPan);
+$('#zoom-badge').onclick = resetZoom;
+new ResizeObserver(() => applyZoom(false)).observe($('#stage'));
+
+const loadIndexBeforeZoom = loadIndex;
+loadIndex = (...args) => {
+  resetZoom();
+  return loadIndexBeforeZoom(...args);
+};
+
 // ---------- Discord status
 
 const DISCORD_ICON = 'https://raw.githubusercontent.com/soqu4c/Tako.player/main/assets/icon.png';

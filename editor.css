@@ -28,8 +28,8 @@
   background: #101114;
 }
 /* four panels as in Premiere's editing workspace */
-.ed-top { display: grid; grid-template-columns: minmax(300px, 30%) 1fr; gap: 4px; min-height: 0; }
-.ed-bottom { display: grid; grid-template-columns: minmax(220px, 20%) 1fr; gap: 4px; min-height: 0; }
+.ed-top { display: grid; grid-template-columns: var(--fx-w, minmax(300px, 30%)) 6px minmax(0, 1fr); min-height: 0; }
+.ed-bottom { display: grid; grid-template-columns: var(--bin-w, minmax(220px, 20%)) 6px minmax(0, 1fr); min-height: 0; }
 .ed-panel, .ed-timeline { background: #1b1c21; border: 1px solid #26272e; border-radius: 8px; overflow: hidden; min-height: 0; }
 .ed-tabs {
   display: flex;
@@ -457,3 +457,7 @@ body.fx-scrub, body.fx-scrub * { cursor: ew-resize !important; }
 .ed-split { cursor: row-resize; position: relative; }
 .ed-split::after { content: ""; position: absolute; left: 50%; top: 2px; width: 40px; height: 2px; margin-left: -20px; border-radius: 2px; background: #34353d; }
 .ed-split:hover::after, .ed-split.drag::after { background: #4c9bff; }
+.ed-vsplit { cursor: col-resize; position: relative; }
+.ed-vsplit::after { content: ""; position: absolute; top: 50%; left: 2px; height: 40px; width: 2px; margin-top: -20px; border-radius: 2px; background: #34353d; }
+.ed-vsplit:hover::after, .ed-vsplit.drag::after { background: #4c9bff; }
+body.ed-resizing, body.ed-resizing * { user-select: none; }

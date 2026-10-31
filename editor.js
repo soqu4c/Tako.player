@@ -1531,6 +1531,30 @@ const setTopH = px => edBox.style.setProperty('--top-h', Math.round(clamp(px, 16
   const saved = recall('edTopH', 0);
   if (saved) setTopH(saved);
 }
+$('.ed-split').ondblclick = () => { edBox.style.removeProperty('--top-h'); store('edTopH', 0); };
+// Side borders: effects | monitor and project | timeline
+for (const bar of document.querySelectorAll('.ed-vsplit')) {
+  const v = bar.dataset.var, key = bar.dataset.key;
+  const panel = bar.previousElementSibling;
+  const setW = px => edBox.style.setProperty(v, Math.round(clamp(px, 180, bar.parentNode.clientWidth - 320)) + 'px');
+  const saved = recall(key, 0);
+  if (saved) setW(saved);
+  bar.ondblclick = () => { edBox.style.removeProperty(v); store(key, 0); };
+  bar.addEventListener('pointerdown', e => {
+    bar.setPointerCapture(e.pointerId);
+    bar.classList.add('drag');
+    document.body.classList.add('ed-resizing');
+    const left = panel.getBoundingClientRect().left;
+    bar.onpointermove = ev => setW(ev.clientX - left - 3);
+    bar.onpointerup = () => {
+      bar.onpointermove = bar.onpointerup = null;
+      bar.classList.remove('drag');
+      document.body.classList.remove('ed-resizing');
+      store(key, panel.getBoundingClientRect().width);
+      renderTimeline();
+    };
+  });
+}
 $('.ed-split').addEventListener('pointerdown', e => {
   const bar = e.currentTarget;
   bar.setPointerCapture(e.pointerId);

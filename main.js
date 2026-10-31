@@ -105,8 +105,13 @@ function createWindow() {
   win.removeMenu();
   win.loadFile(path.join(__dirname, 'index.html'));
   win.webContents.once('did-finish-load', () => {
+    // Files are opened once the startup update check is over, so an update installing
+    // first does not start playback behind the splash
     const files = argPaths(process.argv);
-    if (files.length) win.webContents.send('open-paths', files);
+    const toOpen = files.length ? files : takePendingOpen();
+    startupGate.then(() => {
+      if (toOpen.length && win) win.webContents.send('open-paths', toOpen);
+    });
   });
   win.on('closed', () => { win = null; });
 }
@@ -122,14 +127,36 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
   createWindow();
-  setupUpdates(argPaths(process.argv).length > 0);
+  setupUpdates(argPaths(process.argv));
 });
+
+// Files the player was started with survive the restart that installs an update
+const pendingOpenFile = () => path.join(app.getPath('userData'), 'pending-open.json');
+const PENDING_OPEN_MAX_AGE = 10 * 60 * 1000;
+
+function savePendingOpen(files) {
+  if (!files.length) return;
+  try {
+    fs.writeFileSync(pendingOpenFile(), JSON.stringify({ at: Date.now(), files }));
+  } catch {}
+}
+
+function takePendingOpen() {
+  try {
+    const { at, files } = JSON.parse(fs.readFileSync(pendingOpenFile(), 'utf8'));
+    fs.rmSync(pendingOpenFile(), { force: true });
+    return Date.now() - at < PENDING_OPEN_MAX_AGE ? files.filter(f => fs.existsSync(f)) : [];
+  } catch {
+    return [];
+  }
+}
 
 // ---------- updates from GitHub Releases
 //
-// On a plain start the splash waits for the check: a new version is downloaded and installed
-// before the player opens. Started with a file, or after "skip", the update downloads in the
-// background and installs on the next quit (or on "restart"). Runs from source never update.
+// Every start waits on the splash for the check: a new version is downloaded and installed
+// before the player opens (files it was started with reopen after the restart). After "skip"
+// or a slow network the update downloads in the background and installs by itself on quit,
+// or right away from the title bar button. Runs from source never update.
 
 let updater = null;
 let updateState = { status: 'idle' };
@@ -150,7 +177,7 @@ function releaseStartup() {
 
 const STARTUP_CHECK_MS = 6000;
 
-function setupUpdates(openedWithFiles) {
+function setupUpdates(openedFiles) {
   if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
@@ -164,18 +191,16 @@ function setupUpdates(openedWithFiles) {
   updater.on('download-progress', p => sendUpdate({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
   updater.on('update-downloaded', i => {
     sendUpdate({ status: 'ready', version: i.version });
-    if (blocking) updater.quitAndInstall(true, true);
+    if (blocking) {
+      savePendingOpen(openedFiles);
+      updater.quitAndInstall(true, true);
+    }
   });
   updater.on('error', e => {
     sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] });
     if (blocking) releaseStartup();
   });
 
-  if (openedWithFiles) {
-    releaseStartup();
-    setTimeout(() => updater.checkForUpdates().catch(() => {}), 4000);
-    return;
-  }
   blocking = true;
   // No answer in time (slow or no network): open the player; a found update keeps downloading
   setTimeout(() => {

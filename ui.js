@@ -1351,6 +1351,7 @@ async function trashFile(file) {
 function fileMenu(file, play, x, y) {
   openCtxMenu(x, y, [
     { icon: 'i-play', label: 'Смотреть', run: play },
+    { icon: 'i-film', label: 'В редактор', run: () => edFromLibrary([file]) },
     { icon: 'i-star', label: favorites.has(file) ? 'Убрать из избранного' : 'В избранное', run: () => toggleFavorite(file) },
     '-',
     { icon: 'i-edit', label: 'Переименовать…', run: () => renameFile(file) },

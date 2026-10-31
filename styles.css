@@ -447,7 +447,8 @@ body.audio-only #audio-art { display: flex; }
 }
 body.idle #controls, body:not(.loaded) #controls { opacity: 0; transform: translateY(18px); pointer-events: none; }
 #controls { container-type: inline-size; }
-.row.main > .group:first-child { flex: none; }
+.row.main { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.row.main > .group.transport { justify-self: center; }
 @container (max-width: 960px) {
   #btn-names { display: none; }
   .pick { flex-basis: 150px; }

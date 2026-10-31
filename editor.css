@@ -18,7 +18,7 @@
 .ed {
   --head-w: 132px;
   --lane-h: 54px;
-  --lane-min: 22px;
+  --lane-min: 32px;
   position: absolute;
   inset: 0;
   display: grid;
@@ -74,8 +74,12 @@
 }
 .ed-item:hover { background: rgba(255, 255, 255, .07); }
 .ed-item > i { grid-row: span 2; width: 8px; height: 26px; border-radius: 3px; background: var(--ed-vid); }
+.ed-item.vid, .ed-item.img { grid-template-columns: 64px minmax(0, 1fr) auto; }
+.ed-item.vid > i, .ed-item.img > i { width: 64px; height: 36px; border-radius: 5px; overflow: hidden; border-left: 3px solid var(--ed-vid); background: #000; }
+.ed-item.img > i { border-left-color: var(--ed-img); }
+.ed-item > i > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ed-item > i > img:not([src]) { visibility: hidden; }
 .ed-item.aud > i { background: var(--ed-aud); }
-.ed-item.img > i { background: var(--ed-img); }
 .ed-item .n { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-item small { color: var(--muted); font-size: 11px; grid-column: 2; }
 .ed-item button { grid-row: 1 / span 2; grid-column: 3; opacity: .35; }
@@ -90,6 +94,13 @@
 #ed-screen video, #ed-screen .ed-layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 #ed-v2, #ed-screen .ed-layer.V2 { z-index: 2; }
 #ed-titles { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+#ed-xform { position: absolute; z-index: 4; box-sizing: border-box; border: 1px solid rgba(var(--accent-rgb), .95); cursor: move; box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); }
+#ed-xform i { position: absolute; width: 9px; height: 9px; margin: -5px; background: #fff; border: 1px solid rgba(var(--accent-rgb), 1); }
+#ed-xform i[data-c=nw] { left: 0; top: 0; cursor: nwse-resize; }
+#ed-xform i[data-c=se] { right: 0; bottom: 0; cursor: nwse-resize; }
+#ed-xform i[data-c=ne] { right: 0; top: 0; cursor: nesw-resize; }
+#ed-xform i[data-c=sw] { left: 0; bottom: 0; cursor: nesw-resize; }
+.fx-fits { display: flex; gap: 6px; padding: 2px 0 6px 28px; }
 /* a title sits with its centre on its point and can be dragged around */
 .ed-title {
   position: absolute;
@@ -197,7 +208,8 @@
 #ed-heads { border-right: 1px solid var(--line); overflow: hidden; }
 .ed-ruler-pad { position: sticky; top: 0; z-index: 1; height: 30px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .ed-trhead {
-  height: var(--lane-h);
+  position: relative;
+  height: var(--th, var(--lane-h));
   display: flex;
   align-items: center;
   gap: 5px;
@@ -286,7 +298,7 @@
 .ed-thumb:not([src]) { visibility: hidden; }
 .ed-clip.video .ed-name { z-index: 1; }
 .ed-wave-note { position: absolute; right: 8px; top: 4px; font-size: 10.5px; color: rgba(255, 255, 255, .8); pointer-events: none; z-index: 1; }
-.ed-lane { position: relative; height: var(--lane-h); border-bottom: 1px solid var(--line); }
+.ed-lane { position: relative; height: var(--th, var(--lane-h)); border-bottom: 1px solid var(--line); }
 .ed-lane.text { background: rgba(176, 120, 255, .03); }
 .ed-lane.video { background: rgba(80, 150, 255, .03); }
 .ed-lane.audio { background: rgba(70, 210, 140, .03); }
@@ -494,10 +506,18 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 
 /* minimized tracks (wrench → Свернуть все дорожки), as in Premiere */
 .ed.mini-tracks { --lane-h: var(--lane-min); }
-.ed.mini-tracks .ed-wave, .ed.mini-tracks .ed-strip, .ed.mini-tracks .ed-env, .ed.mini-tracks .ed-vol, .ed.mini-tracks .ed-fh, .ed.mini-tracks .ed-wave-note { display: none; }
-.ed.mini-tracks .ed-clip { top: 2px; bottom: 2px; border-radius: 4px; background: var(--cc) !important; }
-.ed.mini-tracks .ed-name { top: 2px; font-size: 10.5px; }
+.ed.mini-tracks .ed-trhead, .ed.mini-tracks .ed-lane { height: var(--lane-min); }
+.ed.mini-tracks .ed-strip, .ed.mini-tracks .ed-env, .ed.mini-tracks .ed-vol, .ed.mini-tracks .ed-fh, .ed.mini-tracks .ed-wave-note { display: none; }
+.ed.mini-tracks .ed-clip { top: 2px; bottom: 2px; border-radius: 4px; }
+.ed.mini-tracks .ed-clip:not(.audio) { background: var(--cc) !important; }
+.ed.mini-tracks .ed-clip.audio { background: linear-gradient(var(--cc) 0 12px, color-mix(in srgb, var(--cc) 62%, #0b0c10) 12px) !important; }
+.ed.mini-tracks .ed-wave { height: calc(100% - 13px); bottom: 1px; }
+.ed.mini-tracks .ed-name { top: 0; font-size: 10px; line-height: 12px; }
 .ed.mini-tracks .ed-trhead { font-size: 11px; }
 .ed.mini-tracks .ed-trhead input[type=range] { display: none; }
 .ed.mini-tracks .ed-trhead button { transform: scale(.8); }
 #ed-marquee { position: absolute; z-index: 5; border: 1px solid #4c9bff; background: rgba(76, 155, 255, .15); pointer-events: none; }
+
+/* the bottom edge of a track header: drag it to make the track taller or lower */
+.ed-trsize { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; z-index: 2; cursor: ns-resize; }
+.ed-trsize:hover { background: rgba(var(--accent-rgb), .5); }

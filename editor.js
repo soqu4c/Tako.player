@@ -147,6 +147,25 @@ async function edImport(paths) {
   return added;
 }
 
+// A picture of the file in the bin: the image itself, or a frame from early in the video
+function binThumb(m) {
+  const img = document.createElement('img');
+  img.alt = '';
+  const key = `${m.path}|bin`;
+  const have = edThumbs.get(key);
+  if (have && have !== 'none') img.src = have;
+  else if (have === undefined) {
+    edThumbs.set(key, '');
+    (m.image ? Promise.resolve(api.toUrl(m.path)) : api.frameThumb({ file: m.path, time: Math.min(1, m.dur / 10) }))
+      .then(url => {
+        edThumbs.set(key, url || 'none');
+        for (const el of document.querySelectorAll('#ed-bin-list .ed-item > i > img')) if (el.dataset.key === key && url) el.src = url;
+      }, () => edThumbs.set(key, 'none'));
+  }
+  img.dataset.key = key;
+  return img;
+}
+
 function renderBin() {
   const box = $('#ed-bin-list');
   box.innerHTML = '';
@@ -161,6 +180,7 @@ function renderBin() {
     row.title = m.path + '\nДвойной клик — добавить в конец таймлайна';
     row.innerHTML = '<i></i><span class="n"></span><small></small><button class="icon sm" title="Убрать из проекта"><svg class="i"><use href="#i-x"/></svg></button>';
     row.querySelector('.n').textContent = m.name;
+    if (m.video) row.querySelector('i').append(binThumb(m));
     row.querySelector('small').textContent = m.image ? 'картинка' : fmt(m.dur) + (m.audio.length > 1 ? ` · ${m.audio.length} дор.` : '');
     row.addEventListener('dragstart', e => {
       e.dataTransfer.setData('text/tako-media', m.path);
@@ -307,8 +327,45 @@ function renderHeads() {
     }
     h.classList.toggle('off', trackSilent(tr.id) || st.hidden);
     h.classList.toggle('locked', !!st.locked);
+    h.dataset.track = tr.id;
+    if (trackH[tr.id]) h.style.setProperty('--th', trackH[tr.id] + 'px');
+    const grip = document.createElement('i');
+    grip.className = 'ed-trsize';
+    grip.title = 'Тяните вверх или вниз — высота дорожки; двойной клик — как было';
+    grip.onpointerdown = e => resizeTrack(e, tr.id);
+    grip.ondblclick = () => setTrackH(tr.id, 0);
+    h.append(grip);
     box.append(h);
   }
+}
+
+// Each track can be made taller or lower by dragging the bottom edge of its header, as in
+// Premiere; the heights are remembered for the app, not for the project
+const trackH = recall('edTrackH', {});
+const TRACK_H_MIN = 26, TRACK_H_MAX = 240;
+function setTrackH(id, px) {
+  if (px) trackH[id] = Math.round(clamp(px, TRACK_H_MIN, TRACK_H_MAX));
+  else delete trackH[id];
+  store('edTrackH', trackH);
+  for (const el of document.querySelectorAll(`.ed-trhead[data-track="${id}"], .ed-lane[data-track="${id}"]`)) {
+    if (px) el.style.setProperty('--th', trackH[id] + 'px');
+    else el.style.removeProperty('--th');
+  }
+}
+function resizeTrack(e, id) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (ed.miniTracks) setMiniTracks(false);
+  const grip = e.currentTarget;
+  const h0 = grip.parentElement.getBoundingClientRect().height, y0 = e.clientY;
+  grip.setPointerCapture(e.pointerId);
+  document.body.classList.add('ed-resizing');
+  grip.onpointermove = ev => setTrackH(id, h0 + ev.clientY - y0);
+  grip.onpointerup = () => {
+    grip.onpointermove = grip.onpointerup = null;
+    document.body.classList.remove('ed-resizing');
+    renderTimeline(); // waveforms and film strips are drawn again for the new height
+  };
 }
 
 // Timecode as in Premiere: hours:minutes:seconds:frames
@@ -465,6 +522,7 @@ function renderTimeline() {
     const lane = document.createElement('div');
     lane.className = `ed-lane ${tr.kind}`;
     lane.dataset.track = tr.id;
+    if (trackH[tr.id]) lane.style.setProperty('--th', trackH[tr.id] + 'px');
     lane.style.setProperty('--tc', trackColor(tr.id));
     lane.classList.toggle('off', (tr.kind === 'audio' && trackSilent(tr.id)) || ed.p.tracks[tr.id].hidden);
     lane.classList.toggle('locked', !!ed.p.tracks[tr.id].locked);
@@ -1140,6 +1198,7 @@ const parseRot = s => {
 };
 
 function renderInspector() {
+  placeXform();
   const body = $('#ed-insp-body');
   body.innerHTML = '';
   const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
@@ -1197,7 +1256,7 @@ function renderInspector() {
     const num = document.createElement('span');
     num.className = 'fx-num';
     num.tabIndex = 0;
-    const paint = () => { num.textContent = show ? show(get(c)) : String(Math.round(get(c) / step) * step).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); };
+    const paint = () => { num.textContent = show ? show(get(c)) : String(+(Math.round(get(c) / step) * step).toFixed(6)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); };
     paint();
     num.paint = paint;
     const apply = v => {
@@ -1287,6 +1346,17 @@ function renderInspector() {
         { get: x => motion(x).sx, set: (x, n) => { x.scaleX = n; if (ed.scaleLink) x.scaleY = n; }, min: 1, max: 2000, unit: '%', list: p },
         { get: x => motion(x).sy, set: (x, n) => { x.scaleY = n; if (ed.scaleLink) x.scaleX = n; }, min: 1, max: 2000, unit: '%', list: p },
       ], { link: { on: () => ed.scaleLink, toggle: () => { ed.scaleLink = !ed.scaleLink; store('edScaleLink', ed.scaleLink); } } });
+      const fits = document.createElement('div');
+      fits.className = 'fx-fits';
+      for (const [label, how, title] of [['Вписать', 'fit', 'Весь кадр видео виден, по краям могут остаться полосы'], ['Заполнить', 'fill', 'Видео закрывает весь кадр, лишнее обрезается (для 9:16 из горизонтального)']]) {
+        const b = document.createElement('button');
+        b.className = 'btn small ghost';
+        b.textContent = label;
+        b.title = title;
+        b.onclick = () => { edCommit(); p.forEach(x => fitClip(x, how)); edChanged(); };
+        fits.append(b);
+      }
+      rows.append(fits);
       row(rows, 'Поворот', [{ get: x => motion(x).rot, set: (x, n) => { x.rot = n; }, min: -36000, max: 36000, unit: '°', show: showRot, parse: parseRot, list: p }]);
       row(rows, 'Непрозрачность', [{ get: x => motion(x).opacity, set: (x, n) => { x.opacity = n; }, min: 0, max: 100, unit: '%', list: p }]);
     }, () => p.forEach(x => { x.posX = x.posY = x.scale = x.scaleX = x.scaleY = x.anchorX = x.anchorY = x.opacity = null; x.rot = 0; }));
@@ -1420,6 +1490,16 @@ function placement(c) {
   const a = mo.rot * Math.PI / 180;
   return { w, h, cx: mo.x - (ox * Math.cos(a) - oy * Math.sin(a)), cy: mo.y - (ox * Math.sin(a) + oy * Math.cos(a)), rot: mo.rot, sx: mo.sx / 100, sy: mo.sy / 100, opacity: mo.opacity / 100 };
 }
+// Centre the picture and size it to the frame: whole picture seen ("fit") or the frame
+// covered with the picture's edges cut off ("fill", e.g. a wide video in a 9:16 frame)
+function fitClip(c, how) {
+  const mo = motion(c);
+  const fit = Math.min(ed.p.w / mo.sw, ed.p.h / mo.sh);
+  const s = how === 'fill' ? Math.max(ed.p.w / mo.sw, ed.p.h / mo.sh) / fit * 100 : 100;
+  c.scaleX = c.scaleY = Math.round(s * 10) / 10;
+  c.posX = c.posY = c.anchorX = c.anchorY = c.scale = null;
+}
+
 // The same on screen: the preview is the frame shrunk to fit, the picture sits in the middle
 function motionCss(c, el) {
   const pl = placement(c);
@@ -1545,8 +1625,81 @@ function syncPreview(force) {
       titles.append(d);
     }
   }
+  placeXform();
   placePlayhead();
 }
+
+// A frame around the selected picture on the monitor: drag it to move the picture, drag a
+// corner to scale it (around its middle), as with the transform box in Premiere
+const xform = $('#ed-xform');
+function xformClip() {
+  const sel = ed.p.clips.filter(c => ed.sel.has(c.id));
+  const c = sel.length === 1 && sel[0];
+  if (!c || trackOf(c.track).kind !== 'video' || ed.p.tracks[c.track].hidden || clipAt(c.track, ed.t) !== c) return null;
+  return c;
+}
+function placeXform() {
+  const c = xformClip();
+  xform.hidden = !c || ed.playing;
+  if (xform.hidden) return;
+  const pl = placement(c);
+  const k = $('#ed-screen').clientHeight / ed.p.h;
+  Object.assign(xform.style, {
+    left: pl.cx * k + 'px', top: pl.cy * k + 'px',
+    width: Math.abs(pl.w) * k + 'px', height: Math.abs(pl.h) * k + 'px',
+    transform: `translate(-50%, -50%) rotate(${pl.rot}deg)`,
+  });
+}
+xform.onclick = e => e.stopPropagation();
+xform.ondblclick = e => {
+  e.stopPropagation();
+  const c = xformClip();
+  if (!c) return;
+  edCommit();
+  fitClip(c, 'fill');
+  edChanged();
+};
+xform.onpointerdown = e => {
+  const c = xformClip();
+  if (!c || e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const corner = e.target.dataset.c;
+  const k = $('#ed-screen').clientHeight / ed.p.h;
+  const r = $('#ed-screen').getBoundingClientRect();
+  const mo = motion(c), pl = placement(c);
+  // the picture's middle on screen, for scaling by the corners
+  const mx = r.left + pl.cx * k, my = r.top + pl.cy * k;
+  const d0 = Math.max(1, Math.hypot(e.clientX - mx, e.clientY - my));
+  const sx = e.clientX, sy = e.clientY;
+  let moved = false;
+  xform.setPointerCapture(e.pointerId);
+  xform.onpointermove = ev => {
+    if (!moved) {
+      if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3) return;
+      edCommit();
+      moved = true;
+    }
+    if (corner) {
+      const f = Math.hypot(ev.clientX - mx, ev.clientY - my) / d0;
+      c.scaleX = Math.round(clamp(mo.sx * f, 1, 2000) * 10) / 10;
+      c.scaleY = Math.round(clamp(mo.sy * f, 1, 2000) * 10) / 10;
+      c.scale = null;
+    } else {
+      // the middle of the frame pulls the picture in, like a guide
+      let x = mo.x + (ev.clientX - sx) / k, y = mo.y + (ev.clientY - sy) / k;
+      if (Math.abs(x - ed.p.w / 2) * k < 6) x = ed.p.w / 2;
+      if (Math.abs(y - ed.p.h / 2) * k < 6) y = ed.p.h / 2;
+      c.posX = Math.round(x);
+      c.posY = Math.round(y);
+    }
+    syncPreview();
+  };
+  xform.onpointerup = () => {
+    xform.onpointermove = xform.onpointerup = null;
+    if (moved) edChanged();
+  };
+};
 
 function seekEd(t) {
   ed.t = clamp(t, 0, Math.max(edDuration(), 0));
@@ -1621,6 +1774,7 @@ function fitScreen() {
   s.style.width = Math.floor(ed.p.w * k) + 'px';
   s.style.height = Math.floor(ed.p.h * k) + 'px';
   s.style.setProperty('--ed-h', Math.floor(ed.p.h * k) + 'px');
+  placeXform();
 }
 new ResizeObserver(fitScreen).observe($('#ed-screen-wrap'));
 
@@ -1954,6 +2108,26 @@ showView = v => {
 };
 $('#nav-editor').onclick = () => showView('editor');
 
+// From the library: a file dragged onto the editor button opens the editor under the mouse,
+// so it can be dropped right on a track or in the bin; the file menu has "В редактор"
+let springTimer = 0;
+$('#nav-editor').addEventListener('dragenter', () => {
+  clearTimeout(springTimer);
+  springTimer = setTimeout(() => showView('editor'), 450);
+});
+$('#nav-editor').addEventListener('dragleave', () => clearTimeout(springTimer));
+$('#nav-editor').addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation(); // not opened in the player as well
+  clearTimeout(springTimer);
+  const files = [...e.dataTransfer.files].map(f => api.pathForFile(f)).filter(Boolean);
+  if (files.length) edFromLibrary(files);
+});
+async function edFromLibrary(files) {
+  showView('editor');
+  for (const m of await edImport(files)) edPlace(m, null, edDuration());
+}
+
 renderBin();
 renderHeads();
 renderToggles();
@@ -2041,6 +2215,7 @@ $('#ed-wrench').onclick = e => {
     ed.miniTracks
       ? { icon: 'i-chevron', label: 'Развернуть все дорожки', run: () => setMiniTracks(false) }
       : { icon: 'i-chevron', label: 'Свернуть все дорожки (минимализм)', run: () => setMiniTracks(true) },
+    { icon: 'i-chevron', label: 'Обычная высота всех дорожек', run: () => { for (const id of Object.keys(trackH)) setTrackH(id, 0); setMiniTracks(false); } },
     '-',
     { icon: 'i-link', label: ed.sel.size ? 'Отвязать выделенные клипы' : 'Отвязать все клипы', run: unlinkAll },
     { icon: 'i-link', label: 'Связать выделенные клипы', run: linkSelected },

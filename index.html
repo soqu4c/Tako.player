@@ -10,7 +10,7 @@
 <body data-view="player">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 1-5-5L13 2.4l1.7 1.7-1 2.2 2.2-1z"/><path d="M3 21l6-6"/></symbol>
+    <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
     <symbol id="i-pointer" viewBox="0 0 24 24"><path fill="currentColor" d="M5 2.5l13.5 12.2-6.3.6 3.7 7.1-2.6 1.3-3.7-7.2L5 21z"/></symbol>
     <symbol id="i-track-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="14" rx="1.5" stroke-dasharray="3 2.5"/><path d="M13 12h8"/><path d="M18 8l3 4-3 4"/></symbol>
     <symbol id="i-razor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 3.5l6 6-11 11-6-6z"/><path d="M11 7l6 6"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"/></symbol>
@@ -146,10 +146,7 @@
           </div>
 
           <div class="row main">
-            <div class="group">
-              <button id="btn-prev" class="icon" title="Предыдущий файл (PageUp)"><svg class="i"><use href="#i-prev"/></svg></button>
-              <button id="btn-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="play-icon" href="#i-play"/></svg></button>
-              <button id="btn-next" class="icon" title="Следующий файл (PageDown)"><svg class="i"><use href="#i-next"/></svg></button>
+            <div class="group left">
               <button id="btn-back" class="icon skip" title="Назад (←)"><svg class="i"><use href="#i-back"/></svg><span class="skip-n"></span></button>
               <button id="btn-fwd" class="icon skip" title="Вперёд (→)"><svg class="i"><use href="#i-fwd"/></svg><span class="skip-n"></span></button>
               <div class="vol">
@@ -157,6 +154,11 @@
                 <input type="range" id="volume" min="0" max="2" step="0.01" value="1" title="Громкость до 200% (↑ ↓, колесо мыши)">
               </div>
               <span id="time" title="Нажмите, чтобы показать миллисекунды">0:00 / 0:00</span>
+            </div>
+            <div class="group transport">
+              <button id="btn-prev" class="icon" title="Предыдущий файл (PageUp)"><svg class="i"><use href="#i-prev"/></svg></button>
+              <button id="btn-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="play-icon" href="#i-play"/></svg></button>
+              <button id="btn-next" class="icon" title="Следующий файл (PageDown)"><svg class="i"><use href="#i-next"/></svg></button>
             </div>
             <div class="group right">
               <label class="pick" title="Аудиодорожка (A)"><svg class="i"><use href="#i-audio"/></svg><select id="audio-select"><option>—</option></select></label>
@@ -311,7 +313,8 @@
                 <option value="1280x720">1280×720</option>
                 <option value="2560x1440">2560×1440</option>
                 <option value="3840x2160">3840×2160</option>
-                <option value="1080x1920">1080×1920 (вертикальный)</option>
+                <option value="1080x1920">1080×1920 (9:16, вертикальный)</option>
+                <option value="720x1280">720×1280 (9:16)</option>
                 <option value="1080x1080">1080×1080 (квадрат)</option>
               </select>
               <select id="ed-fps" class="chip" title="Кадров в секунду">
@@ -327,6 +330,7 @@
                 <video id="ed-v1" muted playsinline></video>
                 <video id="ed-v2" muted playsinline></video>
                 <div id="ed-titles"></div>
+                <div id="ed-xform" hidden title="Тяните — переместить; за углы — масштаб; двойной клик — заполнить кадр"><i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i></div>
               </div>
             </div>
             <div class="ed-transport">

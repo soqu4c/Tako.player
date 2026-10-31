@@ -1921,6 +1921,7 @@ document.addEventListener('keydown', e => {
     KeyH: () => setTool('hand'),
     KeyM: addMarker,
     Backslash: zoomToFit,
+    F1: () => $('#help-dlg').showModal(),
     KeyT: addText,
     Delete: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
     Backspace: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
@@ -2223,12 +2224,21 @@ function linkSelected() {
 $('#ed-wrench').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect();
   openCtxMenu(r.left, r.bottom + 4, [
-    ed.miniTracks
-      ? { icon: 'i-chevron', label: 'Развернуть все дорожки', run: () => setMiniTracks(false) }
-      : { icon: 'i-chevron', label: 'Свернуть все дорожки (минимализм)', run: () => setMiniTracks(true) },
-    { icon: 'i-chevron', label: 'Обычная высота всех дорожек', run: () => { for (const id of Object.keys(trackH)) setTrackH(id, 0); setMiniTracks(false); } },
+    // Premiere's Minimize / Expand All Tracks: every track low, or every track back to normal
+    ed.miniTracks || Object.keys(trackH).length
+      ? { icon: 'i-chevron', label: 'Развернуть все дорожки (обычная высота)', run: () => { for (const id of Object.keys(trackH)) setTrackH(id, 0); setMiniTracks(false); } }
+      : { icon: 'i-chevron', label: 'Свернуть все дорожки — видно больше дорожек сразу', run: () => setMiniTracks(true) },
     '-',
     { icon: 'i-link', label: ed.sel.size ? 'Отвязать выделенные клипы' : 'Отвязать все клипы', run: unlinkAll },
     { icon: 'i-link', label: 'Связать выделенные клипы', run: linkSelected },
   ]);
 };
+
+// Hot keys window: a tab for the player and one for the editor; it opens on the one in use
+function showKeysTab(name) {
+  for (const b of document.querySelectorAll('.keys-tabs button')) b.classList.toggle('on', b.dataset.keys === name);
+  for (const t of document.querySelectorAll('#help-dlg table.keys')) t.hidden = t.dataset.keys !== name;
+}
+for (const b of document.querySelectorAll('.keys-tabs button')) b.onclick = () => showKeysTab(b.dataset.keys);
+new MutationObserver(() => { if ($('#help-dlg').open) showKeysTab(currentView === 'editor' ? 'editor' : 'player'); })
+  .observe($('#help-dlg'), { attributes: true, attributeFilter: ['open'] });

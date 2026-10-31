@@ -706,7 +706,8 @@
 
 <dialog id="help-dlg">
   <h2>Горячие клавиши</h2>
-  <table class="keys">
+  <div class="keys-tabs"><button class="on" data-keys="player">Плеер</button><button data-keys="editor">Редактор (бета)</button></div>
+  <table class="keys" data-keys="player">
     <tr><td><kbd>Пробел</kbd> <kbd>K</kbd></td><td>Воспроизведение / пауза</td></tr>
     <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Перемотка, как кнопки ⟲ ⟳ (шаг — в настройках; Shift — 1 с, Ctrl — 30 с)</td></tr>
     <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Кадр назад / вперёд</td></tr>
@@ -738,6 +739,30 @@
     <tr><td><kbd>Ctrl+E</kbd></td><td>Сохранить фрагмент</td></tr>
     <tr><td><kbd>Ctrl+I</kbd></td><td>Информация о файле</td></tr>
     <tr><td><kbd>Ctrl+,</kbd></td><td>Настройки</td></tr>
+  </table>
+  <table class="keys" data-keys="editor" hidden>
+    <tr><td><kbd>Пробел</kbd></td><td>Воспроизведение / пауза</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Кадр назад / вперёд (Shift — на 1 с)</td></tr>
+    <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>В начало / в конец монтажа</td></tr>
+    <tr><td><kbd>V</kbd></td><td>Выделение (на пустом месте — тянуть рамку)</td></tr>
+    <tr><td><kbd>A</kbd></td><td>Выделить всё дальше по времени (Shift — только эта дорожка)</td></tr>
+    <tr><td><kbd>C</kbd></td><td>Бритва — резать клип по клику (Shift — все дорожки)</td></tr>
+    <tr><td><kbd>H</kbd></td><td>Рука — двигать таймлайн</td></tr>
+    <tr><td><kbd>T</kbd></td><td>Добавить надпись</td></tr>
+    <tr><td><kbd>S</kbd> / <kbd>Shift+S</kbd></td><td>Разрезать выделенный клип / все дорожки по линии времени</td></tr>
+    <tr><td><kbd>Delete</kbd></td><td>Удалить выделенный клип или метку</td></tr>
+    <tr><td><kbd>M</kbd></td><td>Поставить метку (клик — выбрать, тянуть — сдвинуть)</td></tr>
+    <tr><td><kbd>Ctrl+Alt+M</kbd></td><td>Удалить все метки</td></tr>
+    <tr><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd></td><td>Отменить / повторить</td></tr>
+    <tr><td><kbd>Ctrl+C</kbd> <kbd>Ctrl+X</kbd> <kbd>Ctrl+V</kbd></td><td>Копировать / вырезать / вставить у линии времени</td></tr>
+    <tr><td><kbd>Ctrl+A</kbd></td><td>Выделить все клипы</td></tr>
+    <tr><td><kbd>=</kbd> <kbd>−</kbd>, <kbd>Ctrl</kbd> + колесо</td><td>Приблизить / отдалить таймлайн</td></tr>
+    <tr><td><kbd>\</kbd></td><td>Весь монтаж на экран</td></tr>
+    <tr><td><kbd>Ctrl+I</kbd></td><td>Импорт файлов в проект</td></tr>
+    <tr><td><kbd>Ctrl+M</kbd></td><td>Экспорт ролика</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Снять выделение</td></tr>
+    <tr><td>Нижний край названия дорожки</td><td>Тянуть — высота дорожки, двойной клик — как было</td></tr>
+    <tr><td>🔧 над дорожками</td><td>Свернуть / развернуть все дорожки, отвязать или связать клипы</td></tr>
   </table>
   <div class="actions"><button class="btn accent close-dlg">Закрыть</button></div>
 </dialog>

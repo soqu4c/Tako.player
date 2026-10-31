@@ -535,3 +535,11 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .ed-trhead .ed-tb.m.on { background: #d84a3a; color: #fff; }
 .ed-trhead .ed-tb.s.on { background: #d6a52a; color: #111; }
 .ed-trhead.off .ed-trname { opacity: .45; }
+
+/* bottom edge of a track header: drag to make that track taller or lower */
+.ed-trhead { position: relative; }
+.ed-trsize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: row-resize; z-index: 2; }
+.ed-trsize:hover, body.ed-resizing .ed-trsize:active { background: linear-gradient(transparent 2px, #4c9bff 2px 4px, transparent 4px); }
+.keys-tabs { display: flex; gap: 4px; margin: -6px 0 12px; }
+.keys-tabs button { padding: 6px 14px; border-radius: 8px; color: var(--soft); background: rgba(255,255,255,.04); font-weight: 600; font-size: 12.5px; }
+.keys-tabs button.on { color: #fff; background: rgba(var(--accent-rgb), .3); }

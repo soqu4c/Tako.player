@@ -711,6 +711,56 @@ body.audio-only #strip-wave { height: 100%; border-radius: 10px; background: non
 .dash { color: var(--dim); margin: 0 2px; }
 #sel-len { color: var(--accent); margin-left: 8px; font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 600; }
 
+/* ---------- markers */
+
+#markers { position: absolute; inset: 0; pointer-events: none; }
+.marker {
+  position: absolute;
+  top: 3px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  padding: 0;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: #ffd23f;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55);
+  pointer-events: auto;
+  z-index: 3;
+}
+.marker:hover { transform: rotate(45deg) scale(1.3); background: #fff; }
+.marker:active { transform: rotate(45deg) scale(1.1); }
+body.ctl-mini .marker { top: 2px; width: 8px; height: 8px; margin-left: -4px; }
+#btn-markers { position: relative; }
+#markers-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ffd23f;
+  color: #111;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 15px;
+}
+.mk-around { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--soft); margin-bottom: 14px; }
+.mk-num { width: 64px; }
+#mk-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; margin-bottom: 14px; }
+.mk-row { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, .04); }
+.mk-row label { flex: 1; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--soft); }
+.mk-n { font-weight: 600; color: var(--text); }
+.mk-t { color: #ffd23f; font-variant-numeric: tabular-nums; font-weight: 600; }
+.mk-row small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mk-empty { color: var(--muted); padding: 18px; text-align: center; }
+.mk-options { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.mk-options label { flex: 1 1 220px; display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; }
+.mk-options select { width: 100%; max-width: none; }
+#mk-progress { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; }
+#mk-status { color: var(--muted); }
+
 /* ---------- zoom */
 
 .zoom-smooth { transition: transform .14s ease-out; }

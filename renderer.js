@@ -1557,6 +1557,7 @@ document.addEventListener('keydown', e => {
     KeyH: toggleCollapse,
     KeyZ: resetZoom,
     KeyW: togglePip,
+    KeyB: () => (e.shiftKey ? openMarkers() : addMarker()),
     KeyC: screenshot,
     KeyT: toggleTrim,
     KeyD: toggleDraw,

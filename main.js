@@ -765,7 +765,19 @@ ipcMain.handle('save-dialog', async (_e, { source, ext }) => {
   return r.canceled || !r.filePath ? null : r.filePath;
 });
 
+// "name.mp4" -> "name (2).mp4" and so on until the name is free
+function freePath(file) {
+  if (!fs.existsSync(file)) return file;
+  const { dir, name, ext } = path.parse(file);
+  for (let n = 2; ; n++) {
+    const p = path.join(dir, `${name} (${n})${ext}`);
+    if (!fs.existsSync(p)) return p;
+  }
+}
+
 ipcMain.handle('export', async (_e, o) => {
+  // Batch exports never overwrite: an existing name gets a number
+  if (o.unique) o.out = freePath(o.out);
   if (path.resolve(o.out).toLowerCase() === path.resolve(o.file).toLowerCase()) {
     throw new Error('Нельзя сохранить поверх исходного файла');
   }

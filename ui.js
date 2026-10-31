@@ -1230,7 +1230,7 @@ function confirmDialog(title, text, yes) {
 
 // Records kept by path (progress, track names, opened, favourites) follow a renamed file
 function moveFileRecords(from, to) {
-  for (const key of ['positions', 'trackNames', 'opened']) {
+  for (const key of ['positions', 'trackNames', 'opened', 'markers']) {
     const all = recall(key, {});
     if (from in all) {
       all[to] = all[from];
@@ -1245,7 +1245,7 @@ function moveFileRecords(from, to) {
 }
 
 function dropFileRecords(file) {
-  for (const key of ['positions', 'trackNames', 'opened']) {
+  for (const key of ['positions', 'trackNames', 'opened', 'markers']) {
     const all = recall(key, {});
     if (file in all) {
       delete all[file];
@@ -1855,6 +1855,198 @@ loadIndex = (...args) => {
   resetZoom();
   return loadIndexBeforeZoom(...args);
 };
+
+// ---------- markers: B marks a moment; the list turns marks into clips
+//
+// Marks are kept per file (seconds). Each becomes a clip from `before` seconds ahead of it to
+// `after` seconds past it, saved one by one into a chosen folder.
+
+const mk = { before: recall('mkBefore', 15), after: recall('mkAfter', 15), running: null };
+
+function fileMarkers(file = currentItem() && currentItem().path) {
+  return file ? (recall('markers', {})[file] || []) : [];
+}
+
+function setFileMarkers(list, file = currentItem() && currentItem().path) {
+  if (!file) return;
+  const all = recall('markers', {});
+  if (list.length) all[file] = [...list].sort((a, b) => a - b);
+  else delete all[file];
+  store('markers', all);
+  renderMarkers();
+}
+
+function addMarker() {
+  if (!state.info) return;
+  const t = Math.round(video.currentTime * 10) / 10;
+  const list = fileMarkers();
+  // A second press on the same spot does not double the mark
+  if (list.some(m => Math.abs(m - t) < 0.5)) return osd('Здесь уже есть метка');
+  setFileMarkers([...list, t]);
+  osd(`Метка ${fileMarkers().indexOf(t) + 1} · ${fmt(t)}`);
+}
+
+function removeMarker(t) {
+  setFileMarkers(fileMarkers().filter(m => m !== t));
+}
+
+function renderMarkers() {
+  const box = $('#markers');
+  box.innerHTML = '';
+  const list = fileMarkers();
+  const d = duration();
+  if (d && state.info) {
+    list.forEach((t, i) => {
+      const m = document.createElement('button');
+      m.className = 'marker';
+      m.style.left = t / d * 100 + '%';
+      m.title = `Метка ${i + 1} · ${fmt(t)} — клик: перейти, правый клик: удалить`;
+      m.addEventListener('pointerdown', e => e.stopPropagation());
+      m.onclick = () => {
+        video.currentTime = t;
+        updateProgress();
+      };
+      m.oncontextmenu = e => {
+        e.preventDefault();
+        removeMarker(t);
+      };
+      box.append(m);
+    });
+  }
+  const badge = $('#markers-badge');
+  badge.hidden = !list.length || !state.info;
+  badge.textContent = list.length;
+}
+video.addEventListener('loadedmetadata', renderMarkers);
+video.addEventListener('emptied', renderMarkers);
+
+function clipRange(t) {
+  return [Math.max(0, t - mk.before), Math.min(duration() || t + mk.after, t + mk.after)];
+}
+
+function renderMarkerList() {
+  const list = fileMarkers();
+  const box = $('#mk-list');
+  box.innerHTML = '';
+  if (!list.length) box.innerHTML = '<div class="mk-empty">Меток пока нет. Нажмите <kbd>B</kbd> во время просмотра, чтобы отметить момент.</div>';
+  list.forEach((t, i) => {
+    const [a, b] = clipRange(t);
+    const row = document.createElement('div');
+    row.className = 'mk-row';
+    row.innerHTML = '<label><input type="checkbox" checked><span class="mk-n"></span><span class="mk-t"></span><small></small></label>'
+      + '<button class="icon sm mk-go" title="Перейти к метке"><svg class="i"><use href="#i-play"/></svg></button>'
+      + '<button class="icon sm mk-rm" title="Удалить метку"><svg class="i"><use href="#i-x"/></svg></button>';
+    row.querySelector('input').dataset.t = t;
+    row.querySelector('.mk-n').textContent = `Метка ${i + 1}`;
+    row.querySelector('.mk-t').textContent = fmt(t);
+    row.querySelector('small').textContent = `клип ${fmt(a)} – ${fmt(b)}`;
+    row.querySelector('.mk-go').onclick = () => {
+      $('#markers-dlg').close();
+      video.currentTime = t;
+      updateProgress();
+    };
+    row.querySelector('.mk-rm').onclick = () => {
+      removeMarker(t);
+      renderMarkerList();
+    };
+    box.append(row);
+  });
+  const n = () => box.querySelectorAll('input:checked').length;
+  const sync = () => {
+    const c = n();
+    $('#mk-export').textContent = c ? `Сохранить ${c} ${plural(c, 'клип', 'клипа', 'клипов')}…` : 'Сохранить клипы…';
+    $('#mk-export').disabled = !c || !!mk.running;
+  };
+  box.onchange = sync;
+  sync();
+  $('#mk-clear').disabled = !list.length || !!mk.running;
+}
+
+function openMarkers() {
+  if (!state.info) return;
+  video.pause();
+  $('#mk-before').value = mk.before;
+  $('#mk-after').value = mk.after;
+  $('#mk-progress').hidden = !mk.running;
+  renderMarkerList();
+  $('#markers-dlg').showModal();
+}
+
+for (const [id, key] of [['#mk-before', 'before'], ['#mk-after', 'after']]) {
+  $(id).addEventListener('change', e => {
+    mk[key] = clamp(Math.round(Number(e.target.value)) || 0, key === 'after' ? 1 : 0, 600);
+    e.target.value = mk[key];
+    store(key === 'before' ? 'mkBefore' : 'mkAfter', mk[key]);
+    renderMarkerList();
+  });
+}
+
+$('#mk-clear').onclick = async () => {
+  $('#markers-dlg').close();
+  if (await confirmDialog('Удалить все метки?', 'Метки этого файла будут удалены. Сами клипы, уже сохранённые на диск, останутся.', 'Удалить')) setFileMarkers([]);
+};
+$('#mk-close').onclick = () => {
+  if (mk.running) api.cancel(mk.running);
+  else $('#markers-dlg').close();
+};
+$('#markers-dlg').addEventListener('cancel', e => { if (mk.running) e.preventDefault(); });
+
+// Saves the ticked marks as clips, one after another, into `folder`
+async function exportMarkers(folder) {
+  const item = currentItem();
+  const times = [...document.querySelectorAll('#mk-list input:checked')].map(c => Number(c.dataset.t));
+  if (!item || !times.length || !folder) return [];
+  const all = fileMarkers();
+  const base = item.name.replace(/\.[^.]+$/, '');
+  const mix = $('#mk-audio').value === 'mix' && state.audioStreams.length > 1;
+  const audio = mix ? state.audioStreams.map(s => s.index) : state.audioStreams[state.audioK] ? [state.audioStreams[state.audioK].index] : [];
+  const saved = [];
+  $('#mk-progress').hidden = false;
+  $('#mk-export').disabled = $('#mk-clear').disabled = true;
+  $('#mk-close').textContent = 'Остановить';
+  try {
+    for (const [j, t] of times.entries()) {
+      const [start, end] = clipRange(t);
+      const jobId = newJob();
+      mk.running = jobId;
+      mk.step = `Клип ${j + 1} из ${times.length}`;
+      $('#mk-status').textContent = mk.step + '…';
+      $('#mk-bar').style.width = '0%';
+      const out = await api.exportClip({
+        jobId, unique: true, file: item.path,
+        out: `${folder}\\${base} — метка ${all.indexOf(t) + 1} (${fmt(t).replace(/:/g, '-')}).mp4`,
+        start, end, format: 'mp4', mode: $('#mk-mode').value, crf: 22, video: !!state.videoStream,
+        audio, subs: [], mix, mixTitle: mix ? 'Все дорожки' : null, volumes: {},
+        titles: Object.fromEntries(state.audioStreams.map((s, k) => [s.index, trackName(s, k)]).filter(([, v]) => v)),
+      });
+      saved.push(out);
+    }
+    $('#mk-status').textContent = `Готово: ${saved.length} ${plural(saved.length, 'клип', 'клипа', 'клипов')} в папке`;
+    $('#mk-bar').style.width = '100%';
+  } catch (e) {
+    const msg = cleanErr(e);
+    $('#mk-status').textContent = msg === 'Отменено' ? `Остановлено, сохранено ${saved.length}` : 'Ошибка: ' + msg;
+  } finally {
+    mk.running = null;
+    $('#mk-close').textContent = 'Закрыть';
+    renderMarkerList();
+  }
+  if (saved.length) toast(`Сохранено клипов: ${saved.length}`, 'Показать в папке', () => api.reveal(saved[0]));
+  return saved;
+}
+
+api.onProgress(({ jobId, value }) => {
+  if (jobId === mk.running) {
+    $('#mk-bar').style.width = Math.round(value * 100) + '%';
+    $('#mk-status').textContent = `${mk.step} · ${Math.round(value * 100)}%`;
+  }
+});
+
+$('#mk-export').onclick = async () => {
+  const folder = await api.pickFolder();
+  if (folder) exportMarkers(folder);
+};
+$('#btn-markers').onclick = openMarkers;
 
 // ---------- small always-on-top window (picture-in-picture)
 

@@ -3,6 +3,21 @@
 
 const CHANGELOG = [
   {
+    version: '1.3.1',
+    date: '2026-11-01',
+    sections: [
+      [['Бета-версия', 'Beta version'], [
+        ['Настройки → О программе → «Версия»: можно перейти на бету с видеоредактором и вернуться обратно на основную', 'Settings → About → “Version”: switch to the beta with the video editor, and back to the main version'],
+      ]],
+      [['Что нового', 'What’s new'], [
+        ['После обновления один раз показывается, что изменилось; потом — кнопкой на главном экране и в «О программе»', 'After an update the changes are shown once; later from the start screen and from About'],
+      ]],
+      [['Discord', 'Discord'], [
+        ['В статусе Discord есть кнопка «Скачать Tako.player»', 'The Discord status has a “Download Tako.player” button'],
+      ]],
+    ],
+  },
+  {
     version: '1.3.0',
     date: '2026-10-31',
     sections: [

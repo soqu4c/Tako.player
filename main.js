@@ -203,11 +203,30 @@ function releaseStartup() {
 
 const STARTUP_CHECK_MS = 6000;
 
+// Which builds to take: 'stable', or 'beta' (pre-releases with the video editor, ahead of the
+// main version). Going back to stable installs the newest main version even though its number
+// is lower than the beta's.
+const channelFile = path.join(app.getPath('userData'), 'update-channel.json');
+let updateChannel = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(channelFile, 'utf8')).channel === 'beta' ? 'beta' : 'stable';
+  } catch {
+    return 'stable';
+  }
+})();
+
+function applyChannel() {
+  if (!updater) return;
+  updater.allowPrerelease = updateChannel === 'beta';
+  updater.allowDowngrade = updateChannel === 'stable' && app.getVersion().includes('-');
+}
+
 function setupUpdates(openedFiles) {
   if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
+  applyChannel();
   updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
   updater.on('update-not-available', () => {
     sendUpdate({ status: 'latest' });
@@ -238,7 +257,17 @@ function setupUpdates(openedFiles) {
 ipcMain.handle('startup-gate', () => startupGate);
 ipcMain.handle('startup-skip', () => { if (blocking) releaseStartup(); });
 
-ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater }));
+ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater, channel: updateChannel }));
+ipcMain.handle('update-channel', (_e, channel) => {
+  if (channel !== 'stable' && channel !== 'beta') return updateChannel;
+  updateChannel = channel;
+  try {
+    fs.writeFileSync(channelFile, JSON.stringify({ channel }));
+  } catch {}
+  applyChannel();
+  if (updater) updater.checkForUpdates().catch(() => {});
+  return updateChannel;
+});
 ipcMain.handle('update-check', () => {
   if (updater) updater.checkForUpdates().catch(() => {});
 });

@@ -204,6 +204,8 @@ async function renderSettings(tabId = settingsTab) {
     panel.innerHTML = `<div class="about"><img src="assets/logo.png" alt=""><span class="app-name">Tako<span class="app-suffix">.player</span></span>
       <div>Версия ${version}</div><div>Видео, музыка, обрезка и дорожки — без лишнего.</div><small>Работает на Electron и FFmpeg</small>
       <div class="about-update"><span id="about-update-text"></span>
+        <div class="about-channel"><span>Версия:</span><button data-ch="stable" class="btn small">Основная</button><button data-ch="beta" class="btn small">Бета (видеоредактор)</button></div>
+        <small id="about-channel-hint">Бета получает новое раньше, но может работать с ошибками</small>
         <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-news" class="btn small">Что нового</button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div>
       <div class="donate"><div>Нравится плеер? Можно поддержать автора — это помогает делать Tako лучше.</div>
         <button id="about-donate" class="btn accent"><svg class="i"><use href="#i-heart"/></svg>Поддержать автора</button></div></div>`;
@@ -211,6 +213,9 @@ async function renderSettings(tabId = settingsTab) {
     $('#about-news').onclick = () => openNews();
     $('#about-donate').onclick = () => api.openDonate();
     $('#about-check').onclick = () => (upd.status === 'ready' ? api.updateInstall() : api.updateCheck());
+    for (const b of document.querySelectorAll('.about-channel button')) {
+      b.onclick = async () => renderUpdate({ channel: await api.updateChannel(b.dataset.ch) });
+    }
     renderUpdate(upd);
     return;
   }
@@ -2388,6 +2393,7 @@ function renderUpdate(s) {
   const check = $('#about-check');
   check.textContent = upd.status === 'ready' ? 'Перезапустить и обновить' : 'Проверить обновления';
   check.disabled = upd.enabled === false || upd.status === 'checking' || upd.status === 'downloading';
+  for (const b of document.querySelectorAll('.about-channel button')) b.classList.toggle('accent', b.dataset.ch === (upd.channel || 'stable'));
 }
 
 api.onUpdate(renderUpdate);

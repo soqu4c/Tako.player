@@ -3,6 +3,18 @@
 
 const CHANGELOG = [
   {
+    version: '1.3.3',
+    date: '2026-11-01',
+    sections: [
+      [['Хеллоуин 🎃', 'Halloween 🎃'], [
+        ['С 24 октября по 2 ноября — летучие мыши, паутина и тыквенные цвета. Выключается в Настройки → Интерфейс', 'From October 24 to November 2 — bats, cobwebs and pumpkin colors. Switch it off in Settings → Interface'],
+      ]],
+      [['Сообщить об ошибке', 'Report a problem'], [
+        ['Настройки → О программе → «Сообщить об ошибке»: откроется страница на GitHub, где уже указаны версия и последние ошибки программы', 'Settings → About → “Report a problem”: opens a GitHub page with the version and the program’s recent errors already filled in'],
+      ]],
+    ],
+  },
+  {
     version: '1.3.2',
     date: '2026-11-01',
     sections: [

@@ -744,7 +744,7 @@ $('#recent-clear').onclick = () => {
 const lib = {
   folders: recall('libraryFolders', []),
   data: [],
-  filter: recall('libFilter', 'all'),
+  filter: recall('libFilter', 'all') === 'video' ? 'video' : 'all',
   sort: recall('libSort', 'name'),
   folder: recall('libFolder', 'all'), // 'all' or the folder shown on its own
   query: '',

@@ -19,6 +19,7 @@
     <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
     <symbol id="i-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.7-1.5"/></symbol>
+    <symbol id="i-bat" viewBox="0 0 64 32"><path fill="currentColor" d="M32 11c-1.5-3-3-4.5-3-4.5l-1 3.5c-3-1.2-6-.2-6-.2 1-3-1-7-1-7C14 6 6 8 0 15c6-1 9 1 11 4 2-2 6-2 8 1 2-2 5-2 6 0 2-1 4 1 4 1h6s2-2 4-1c1-2 4-2 6 0 2-3 6-3 8-1 2-3 5-5 11-4C58 8 50 6 43 2.8c0 0-2 4-1 7 0 0-3-1-6 .2l-1-3.5s-1.5 1.5-3 4.5z"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.6v14.8a1 1 0 0 0 1.5.86l12.3-7.4a1 1 0 0 0 0-1.72L8.5 3.74A1 1 0 0 0 7 4.6z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6" y="4" width="4" height="16" rx="1.4"/><rect fill="currentColor" x="14" y="4" width="4" height="16" rx="1.4"/></symbol>
     <symbol id="i-prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon fill="currentColor" points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></symbol>
@@ -102,8 +103,10 @@
           <video id="video" preload="auto"></video>
           <div id="empty">
             <div class="empty-glow"></div>
+            <div class="hw-bats" aria-hidden="true"><svg class="hw-bat b1"><use href="#i-bat"/></svg><svg class="hw-bat b2"><use href="#i-bat"/></svg><svg class="hw-bat b3"><use href="#i-bat"/></svg><svg class="hw-bat b4"><use href="#i-bat"/></svg><svg class="hw-bat b5"><use href="#i-bat"/></svg><svg class="hw-bat b6"><use href="#i-bat"/></svg></div><svg class="hw-web" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M100 0L0 100M100 0L30 100M100 0L0 30M100 0L65 100M100 0L0 65"/><path d="M80 0Q83 17 100 20M58 0Q64 36 100 42M36 0Q45 55 100 64M14 0Q26 74 100 86"/></g></svg>
             <img src="assets/logo.png" class="empty-logo" alt="">
             <h1>Что смотрим сегодня?</h1>
+            <div class="hw-only hw-greet">🎃 Счастливого Хеллоуина!</div>
             <p>Перетащите видео, музыку или целую папку — или выберите ниже</p>
             <div class="empty-actions">
               <button id="btn-open-big" class="btn accent"><svg class="i"><use href="#i-file-plus"/></svg>Открыть файлы</button>
@@ -785,6 +788,7 @@
 </dialog>
 
 <div id="splash">
+  <div class="hw-bats" aria-hidden="true"><svg class="hw-bat b1"><use href="#i-bat"/></svg><svg class="hw-bat b2"><use href="#i-bat"/></svg><svg class="hw-bat b3"><use href="#i-bat"/></svg><svg class="hw-bat b4"><use href="#i-bat"/></svg><svg class="hw-bat b5"><use href="#i-bat"/></svg><svg class="hw-bat b6"><use href="#i-bat"/></svg></div>
   <img src="assets/logo.png" alt="">
   <div class="splash-name">Tako<span class="app-suffix">.player</span></div>
   <div class="splash-update">

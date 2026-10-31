@@ -29,6 +29,7 @@ const ACCENTS = {
 const SUB_SIZES = { s: '1em', m: '1.25em', l: '1.55em', xl: '1.9em' };
 const SUB_BGS = { none: 'transparent', soft: 'rgba(0, 0, 0, .45)', solid: 'rgba(0, 0, 0, .85)' };
 const DEFAULTS = {
+  halloween: true,
   resume: true, autoplay: true, autoNext: true, seekStep: 5,
   accent: 'salsa', preview: true, hideDelay: 2.5, motion: true, splash: true,
   subSize: 'm', subColor: '#ffffff', subBg: 'soft', obsNames: true,
@@ -43,9 +44,15 @@ function hexRgb(hex) {
   return `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`;
 }
 
+// Halloween dress: from Oct 24 to Nov 2 every year, unless switched off in the settings
+const isHalloween = (d = new Date()) => (d.getMonth() === 9 && d.getDate() >= 24) || (d.getMonth() === 10 && d.getDate() <= 2);
+const HALLOWEEN = ['#ff7a18', '#a35cff'];
+
 function applySettings() {
   const root = document.documentElement.style;
-  const [a, b] = ACCENTS[settings.accent] || ACCENTS.salsa;
+  const halloween = settings.halloween !== false && isHalloween();
+  document.body.classList.toggle('halloween', halloween);
+  const [a, b] = halloween ? HALLOWEEN : ACCENTS[settings.accent] || ACCENTS.salsa;
   root.setProperty('--accent', a);
   root.setProperty('--accent-2', b);
   root.setProperty('--accent-rgb', hexRgb(a));
@@ -102,6 +109,7 @@ const SETTING_TABS = [
     id: 'ui', title: 'Интерфейс', icon: 'i-screen', rows: [
       { key: 'lang', type: 'segment', label: 'Язык интерфейса / Language', options: [['ru', 'Русский'], ['en', 'English']] },
       { key: 'accent', type: 'accent', label: 'Цвет акцента' },
+      { key: 'halloween', type: 'toggle', label: 'Оформление к Хеллоуину', hint: 'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента' },
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },

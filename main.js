@@ -39,8 +39,9 @@ const FF_BASE = ['-hide_banner', '-y', '-nostats', '-progress', 'pipe:1'];
 // Lets the renderer switch between audio tracks of one file natively
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
 
-// The beta keeps its own settings, library and caches, so it never touches the main player's
-app.setPath('userData', path.join(app.getPath('appData'), 'takao-beta'));
+// Installed, the beta is the same program as the main version (switched in Settings → About) and
+// keeps its settings; run from the source folder it keeps its own, so testing never touches them
+app.setPath('userData', app.isPackaged ? path.join(app.getPath('appData'), 'takao') : path.join(app.getPath('appData'), 'takao-beta'));
 
 // Interface language. The page keeps the choice; it is mirrored here for native dialogs and
 // file names, and for Chromium's own words (picture-in-picture title) from the next start.
@@ -115,7 +116,7 @@ function createWindow() {
     minWidth: 820,
     minHeight: 520,
     backgroundColor: '#0c0d12',
-    title: 'Tako.player Beta',
+    title: 'Tako.player',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#0c0d12', symbolColor: '#9aa0b4', height: 40 },
@@ -203,14 +204,30 @@ function releaseStartup() {
 
 const STARTUP_CHECK_MS = 6000;
 
+// Which builds to take: 'stable', or 'beta' (pre-releases with the video editor, ahead of the
+// main version). Going back to stable installs the newest main version even though its number
+// is lower than the beta's.
+const channelFile = path.join(app.getPath('userData'), 'update-channel.json');
+let updateChannel = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(channelFile, 'utf8')).channel === 'beta' ? 'beta' : 'stable';
+  } catch {
+    return 'stable';
+  }
+})();
+
+function applyChannel() {
+  if (!updater) return;
+  updater.allowPrerelease = updateChannel === 'beta';
+  updater.allowDowngrade = updateChannel === 'stable' && app.getVersion().includes('-');
+}
+
 function setupUpdates(openedFiles) {
-  // the beta is installed by hand and never updates itself (it would turn into the main player)
-  return releaseStartup();
-  /* eslint-disable no-unreachable */
   if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
+  applyChannel();
   updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
   updater.on('update-not-available', () => {
     sendUpdate({ status: 'latest' });
@@ -241,7 +258,17 @@ function setupUpdates(openedFiles) {
 ipcMain.handle('startup-gate', () => startupGate);
 ipcMain.handle('startup-skip', () => { if (blocking) releaseStartup(); });
 
-ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater }));
+ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater, channel: updateChannel }));
+ipcMain.handle('update-channel', (_e, channel) => {
+  if (channel !== 'stable' && channel !== 'beta') return updateChannel;
+  updateChannel = channel;
+  try {
+    fs.writeFileSync(channelFile, JSON.stringify({ channel }));
+  } catch {}
+  applyChannel();
+  if (updater) updater.checkForUpdates().catch(() => {});
+  return updateChannel;
+});
 ipcMain.handle('update-check', () => {
   if (updater) updater.checkForUpdates().catch(() => {});
 });

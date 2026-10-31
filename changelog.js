@@ -3,6 +3,38 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.1',
+    date: '2026-11-01',
+    sections: [
+      [['Видеоредактор (бета)', 'Video editor (beta)'], [
+        ['Кнопка «β» слева: таймлайн с дорожками видео, звука и титров, монитор, панель проекта и эффектов', 'The “β” button on the left: a timeline with video, sound and title tracks, a monitor, project and effect panels'],
+        ['Все звуковые дорожки файла (игра, микрофон, Discord) — отдельно, с волнами и названиями как в OBS', 'All sound tracks of a file (game, mic, Discord) apart, with waveforms and names as in OBS'],
+        ['Громкость, затухания, положение, масштаб, поворот и прозрачность клипа', 'Clip volume, fades, position, scale, rotation and opacity'],
+        ['Титры со шрифтами, метки, цвета клипов, блокировка и выключение дорожек', 'Titles with fonts, markers, clip colors, locking and muting tracks'],
+        ['Экспорт: размер, частота кадров, качество или битрейт, 2 прохода', 'Export: size, frame rate, quality or bitrate, two passes'],
+      ]],
+      [['Плеер', 'Player'], [
+        ['Несколько звуковых дорожек одновременно — кнопка «+» у дорожек или Shift+A', 'Several sound tracks at once — the “+” button by the tracks or Shift+A'],
+        ['Двойной клик по громкости — 100%', 'Double click on the volume — 100%'],
+      ]],
+    ],
+  },
+  {
+    version: '1.3.1',
+    date: '2026-11-01',
+    sections: [
+      [['Бета-версия', 'Beta version'], [
+        ['Настройки → О программе → «Версия»: можно перейти на бету с видеоредактором и вернуться обратно на основную', 'Settings → About → “Version”: switch to the beta with the video editor, and back to the main version'],
+      ]],
+      [['Что нового', 'What’s new'], [
+        ['После обновления один раз показывается, что изменилось; потом — кнопкой на главном экране и в «О программе»', 'After an update the changes are shown once; later from the start screen and from About'],
+      ]],
+      [['Discord', 'Discord'], [
+        ['В статусе Discord есть кнопка «Скачать Tako.player»', 'The Discord status has a “Download Tako.player” button'],
+      ]],
+    ],
+  },
+  {
     version: '1.3.0',
     date: '2026-10-31',
     sections: [

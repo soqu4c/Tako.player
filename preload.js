@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   obsTracks: () => ipcRenderer.invoke('obs-tracks'),
   updateState: () => ipcRenderer.invoke('update-state'),
   updateCheck: () => ipcRenderer.invoke('update-check'),
+  updateChannel: channel => ipcRenderer.invoke('update-channel', channel),
   updateInstall: () => ipcRenderer.invoke('update-install'),
   onUpdate: cb => ipcRenderer.on('update', (_e, d) => cb(d)),
   startupGate: () => ipcRenderer.invoke('startup-gate'),

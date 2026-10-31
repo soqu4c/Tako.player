@@ -171,6 +171,8 @@ option, optgroup { background: #171922; color: var(--text); }
 .about-update { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
 .about-update #about-update-text { color: var(--soft); }
 .about-links { display: flex; gap: 8px; }
+.about-channel { display: flex; align-items: center; gap: 8px; color: var(--soft); }
+#about-channel-hint { color: var(--soft); margin-top: -4px; }
 .donate {
   display: flex;
   flex-direction: column;

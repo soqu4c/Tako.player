@@ -1309,3 +1309,18 @@ dialog.wide { width: min(780px, 94vw); padding: 0; overflow: hidden; }
 }
 #toast::before { content: ""; width: 4px; align-self: stretch; border-radius: 2px; background: var(--grad); }
 @keyframes toast-in { from { opacity: 0; transform: translateX(24px); } }
+
+/* ---------- small always-on-top window: just the picture and a compact control bar */
+
+body.mini { --titlebar: 30px; }
+body.mini #app { grid-template-columns: 1fr; }
+body.mini #views { margin: 0; border: 0; border-radius: 0; }
+body.mini #titlebar { padding: 0 110px 0 10px; gap: 6px; }
+body.mini #titlebar .logo { width: 16px; height: 16px; }
+body.mini .app-name, body.mini .update-pill { display: none; }
+body.mini #title-file { margin-left: 0; font-size: 12px; }
+body.mini #rail, body.mini #trim-wrap, body.mini #btn-collapse, body.mini #drag-tray { display: none; }
+body.mini #controls { left: 6px; right: 6px; bottom: 6px; padding: 2px 8px 4px; border-radius: 12px; }
+body.mini #controls #timeline { margin-right: 0; }
+body.mini .row.main .group.right > :not(#btn-pip), body.mini #btn-back, body.mini #btn-fwd, body.mini .vol { display: none; }
+body.mini #time { font-size: 11px; }

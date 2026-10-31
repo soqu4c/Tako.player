@@ -1024,7 +1024,8 @@ function changeVolume(dv) {
 }
 
 function toggleFullscreen() {
-  if (document.fullscreenElement) document.exitFullscreen();
+  if (isMini()) togglePip(); // from the small window F goes back to the normal one
+  else if (document.fullscreenElement) document.exitFullscreen();
   else $('#player').requestFullscreen().catch(() => {});
 }
 
@@ -1625,6 +1626,7 @@ document.addEventListener('keydown', e => {
     // In fullscreen Esc only leaves fullscreen; then it closes trimming, then the video (to the library)
     Escape: () => {
       if (document.fullscreenElement) document.exitFullscreen();
+      else if (isMini()) togglePip();
       else if (trimOpen()) setTrimOpen(false);
       else {
         closeVideo();

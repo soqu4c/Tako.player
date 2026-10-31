@@ -2283,30 +2283,29 @@ $('#tray-close').onclick = () => {
   renderTray();
 };
 
-// ---------- small always-on-top window (picture-in-picture)
+// ---------- small always-on-top window
+//
+// The whole window shrinks into a corner and stays over other windows. It is still this page,
+// so W (or Esc) brings it back and every other key, track and subtitle keeps working.
+
+const isMini = () => document.body.classList.contains('mini');
 
 async function togglePip() {
-  if (document.pictureInPictureElement) {
-    document.exitPictureInPicture().catch(() => {});
+  if (isMini()) {
+    document.body.classList.remove('mini');
+    await api.winMini({ on: false });
     return;
   }
-  if (!state.info || !state.videoStream || !document.pictureInPictureEnabled) return;
+  if (!state.info || !state.videoStream) return;
+  if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
   if (draw.on) closeDraw();
-  try {
-    await video.requestPictureInPicture();
-  } catch (e) {
-    toast('Не удалось открыть маленькое окно: ' + cleanErr(e));
-  }
+  setTrimOpen(false);
+  resetZoom();
+  showView('player');
+  const aspect = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9;
+  if (await api.winMini({ on: true, aspect })) document.body.classList.add('mini');
 }
 
-video.addEventListener('enterpictureinpicture', () => {
-  document.body.classList.add('pip');
-  api.winMinimize();
-});
-video.addEventListener('leavepictureinpicture', () => {
-  document.body.classList.remove('pip');
-  api.winRestore();
-});
 $('#btn-pip').onclick = togglePip;
 
 // ---------- Discord status

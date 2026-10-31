@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -123,7 +123,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: false,
-      // Keeps timers at full speed while minimized (picture-in-picture): a separately
+      // Keeps timers at full speed while minimized or covered: a separately
       // streamed audio track is kept in sync by them
       backgroundThrottling: false,
     },
@@ -483,12 +483,38 @@ ipcMain.on('start-drag', (e, file) => {
   e.sender.startDrag({ file, icon: dragIcon });
 });
 
-// The main window steps aside while the video plays in the small always-on-top window
-ipcMain.on('win-minimize', () => { if (win) win.minimize(); });
-ipcMain.on('win-restore', () => {
-  if (!win) return;
-  if (win.isMinimized()) win.restore();
-  win.focus();
+// Small always-on-top window: the main window itself shrinks into a corner of the screen and
+// floats over other windows, so every key and track keeps working; the old size comes back after
+let miniBack = null; // { bounds, maximized } to return to
+const MINI_BAR = 30; // title bar height in the small window
+
+ipcMain.handle('win-mini', (_e, { on, aspect }) => {
+  if (!win) return false;
+  if (on && !miniBack) {
+    miniBack = { bounds: win.getNormalBounds(), maximized: win.isMaximized() };
+    if (win.isFullScreen()) win.setFullScreen(false);
+    if (win.isMaximized()) win.unmaximize();
+    const area = screen.getDisplayMatching(win.getBounds()).workArea;
+    const width = 480;
+    const height = Math.round(width / (aspect > 0.3 && aspect < 4 ? aspect : 16 / 9)) + MINI_BAR;
+    win.setMinimumSize(240, 160);
+    win.setMaximizable(false);
+    win.setTitleBarOverlay({ height: MINI_BAR });
+    win.setBounds({ x: area.x + area.width - width - 16, y: area.y + area.height - height - 16, width, height });
+    win.setAlwaysOnTop(true, 'floating');
+    return true;
+  }
+  if (!on && miniBack) {
+    win.setAlwaysOnTop(false);
+    win.setTitleBarOverlay({ height: 40 });
+    win.setMaximizable(true);
+    win.setMinimumSize(820, 520);
+    win.setBounds(miniBack.bounds);
+    if (miniBack.maximized) win.maximize();
+    miniBack = null;
+    win.focus();
+  }
+  return false;
 });
 
 // Audio track names from the current OBS profile (Settings → Output → Audio), and which of
@@ -548,67 +574,117 @@ ipcMain.handle('library-scan', (_e, folders) => folders.map(dir => ({
 
 ipcMain.handle('library-thumb', (_e, file) => withThumbSlot(() => libraryThumb(file)));
 
-// ---------- waveform of one audio track, for the trim panel
+// ---------- waveforms of the audio tracks, for the trim panel
 //
-// ffmpeg decodes the track to 2000 Hz mono; the loudest sample of each of `points` slices is
-// kept. Big recordings take a while to read, so partial results are sent as they come in;
-// the finished waveform is cached on disk next to the thumbnails.
+// ffmpeg decodes the tracks to 2000 Hz mono; the loudest sample of each of `points` slices is
+// kept. In a game recording the sound is spread across the whole multi-gigabyte file, so
+// reading it is limited by the disk: every audio track is therefore done in the same single
+// pass (one channel each), and switching tracks afterwards is instant. Partial results are
+// sent as they come in; finished waveforms are cached on disk next to the thumbnails.
 
 const WAVE_RATE = 2000;
-const waveJobs = new Map(); // id -> ffmpeg process
+const waveJobs = new Map(); // file|points -> { proc, indexes, peaks: { index: [] }, done, waiters: Map(id -> { sender, index }) }
+const waveWaiters = new Map(); // id -> job
 
-ipcMain.handle('waveform', async (e, { id, file, index, points }) => {
-  const sender = e.sender;
-  const st = fs.statSync(file);
-  const key = crypto.createHash('sha1').update([file, st.size, st.mtimeMs, index, points, 'wave1'].join('|')).digest('hex').slice(0, 16);
-  const cacheFile = path.join(thumbDir(), key + '.wave.json');
-  if (fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-  const info = await probe(file);
-  const total = Math.max(1, (parseFloat(info.format.duration) || 1) * WAVE_RATE);
+const waveCache = (file, st, index, points) => path.join(thumbDir(),
+  crypto.createHash('sha1').update([file, st.size, st.mtimeMs, index, points, 'wave1'].join('|')).digest('hex').slice(0, 16) + '.wave.json');
+
+function startWaveJob(file, st, info, points) {
+  const indexes = info.streams.filter(s => s.codec_type === 'audio').map(s => s.index);
+  if (!indexes.length) throw new Error('в файле нет звука');
+  const dur = parseFloat(info.format.duration) || 1;
+  const total = Math.max(1, dur * WAVE_RATE);
   const per = total / points;
-  const peaks = new Array(points).fill(0);
-  return new Promise((resolve, reject) => {
-    const proc = spawn(FFMPEG, ['-v', 'error', '-i', file, '-map', `0:${index}`, '-vn', '-sn', '-dn', '-ac', '1', '-ar', String(WAVE_RATE), '-f', 's16le', 'pipe:1'], { windowsHide: true });
-    waveJobs.set(id, proc);
-    let n = 0;
-    let odd = null; // a byte left over from the previous chunk
-    let lastSent = 0;
-    proc.stdout.on('data', chunk => {
-      if (odd) {
-        chunk = Buffer.concat([odd, chunk]);
-        odd = null;
+  const n = indexes.length;
+  const job = { indexes, peaks: {}, done: 0, waiters: new Map() };
+  for (const i of indexes) job.peaks[i] = new Array(points).fill(0);
+  // Each track becomes one channel of the output; tracks that end early are padded with silence
+  const graph = indexes.map((i, k) => `[0:${i}]aresample=${WAVE_RATE},aformat=sample_fmts=s16:channel_layouts=mono,apad[w${k}]`).join(';')
+    + (n > 1 ? `;${indexes.map((_, k) => `[w${k}]`).join('')}amerge=inputs=${n}[out]` : '');
+  const proc = spawn(FFMPEG, ['-v', 'error', '-i', file, '-filter_complex', graph, '-map', n > 1 ? '[out]' : '[w0]',
+    '-t', String(dur), '-f', 's16le', 'pipe:1'], { windowsHide: true });
+  job.proc = proc;
+  let frame = 0;
+  let rest = null; // bytes of an incomplete frame left over from the previous chunk
+  let lastSent = 0;
+  const step = n * 2;
+  const send = final => {
+    for (const [id, w] of job.waiters) {
+      if (!w.sender.isDestroyed()) w.sender.send('waveform-progress', { id, peaks: job.peaks[w.index], done: final ? 1 : job.done });
+    }
+  };
+  proc.stdout.on('data', chunk => {
+    if (rest) {
+      chunk = Buffer.concat([rest, chunk]);
+      rest = null;
+    }
+    const end = chunk.length - (chunk.length % step);
+    if (end < chunk.length) rest = chunk.subarray(end);
+    for (let o = 0; o < end; o += step, frame++) {
+      const b = Math.min(points - 1, Math.floor(frame / per));
+      for (let k = 0; k < n; k++) {
+        const v = Math.abs(chunk.readInt16LE(o + k * 2)) / 32768;
+        const arr = job.peaks[indexes[k]];
+        if (v > arr[b]) arr[b] = v;
       }
-      const end = chunk.length - (chunk.length % 2);
-      if (end < chunk.length) odd = chunk.subarray(end);
-      for (let i = 0; i < end; i += 2) {
-        const v = Math.abs(chunk.readInt16LE(i)) / 32768;
-        const b = Math.min(points - 1, Math.floor(n++ / per));
-        if (v > peaks[b]) peaks[b] = v;
-      }
-      if (Date.now() - lastSent > 500 && !sender.isDestroyed()) {
-        lastSent = Date.now();
-        sender.send('waveform-progress', { id, peaks, done: Math.min(1, n / total) });
-      }
-    });
+    }
+    job.done = Math.min(1, frame / total);
+    if (Date.now() - lastSent > 500) {
+      lastSent = Date.now();
+      send(false);
+    }
+  });
+  job.result = new Promise((resolve, reject) => {
     proc.on('error', reject);
     proc.on('close', code => {
-      waveJobs.delete(id);
       if (proc.cancelled) return reject(new Error('Отменено'));
-      if (code !== 0 && !n) return reject(new Error('не удалось прочитать звук'));
+      if (code !== 0 && !frame) return reject(new Error('не удалось прочитать звук'));
       try {
         fs.mkdirSync(thumbDir(), { recursive: true });
-        fs.writeFileSync(cacheFile, JSON.stringify(peaks));
+        for (const i of indexes) fs.writeFileSync(waveCache(file, st, i, points), JSON.stringify(job.peaks[i]));
       } catch {}
-      resolve(peaks);
+      resolve(job.peaks);
     });
   });
+  job.result.catch(() => {}).finally(() => {
+    for (const id of job.waiters.keys()) waveWaiters.delete(id);
+    for (const [k, j] of waveJobs) if (j === job) waveJobs.delete(k);
+  });
+  return job;
+}
+
+ipcMain.handle('waveform', async (e, { id, file, index, points }) => {
+  const st = fs.statSync(file);
+  const cacheFile = waveCache(file, st, index, points);
+  if (fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  const jobKey = `${file}|${points}`;
+  let job = waveJobs.get(jobKey);
+  if (!job) {
+    job = startWaveJob(file, st, await probe(file), points);
+    waveJobs.set(jobKey, job);
+  }
+  if (!job.indexes.includes(index)) throw new Error('нет такой дорожки');
+  clearTimeout(job.idle);
+  job.waiters.set(id, { sender: e.sender, index });
+  waveWaiters.set(id, job);
+  if (job.done) e.sender.send('waveform-progress', { id, peaks: job.peaks[index], done: job.done });
+  return (await job.result)[index];
 });
 
+// Nobody waiting any more: stop reading, but only after a moment, since switching tracks
+// cancels the old request just before asking again for the same file
 ipcMain.on('waveform-cancel', (_e, id) => {
-  const p = waveJobs.get(id);
-  if (!p) return;
-  p.cancelled = true;
-  p.kill();
+  const job = waveWaiters.get(id);
+  if (!job) return;
+  waveWaiters.delete(id);
+  job.waiters.delete(id);
+  if (job.waiters.size) return;
+  clearTimeout(job.idle);
+  job.idle = setTimeout(() => {
+    if (job.waiters.size) return;
+    job.proc.cancelled = true;
+    job.proc.kill();
+  }, 1500);
 });
 
 // ---------- speech recognition (whisper.cpp) for automatic subtitles

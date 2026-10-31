@@ -801,6 +801,9 @@ function makeCard(f, meta, onClick, i) {
     e.preventDefault();
     fileMenu(f.path, onClick, e.clientX, e.clientY);
   });
+  // A card can be dragged straight into Discord, Telegram or a folder
+  card.draggable = true;
+  card.addEventListener('dragstart', e => dragOut(e, f.path));
   card.onclick = onClick;
   cardObserver.observe(card);
   return card;
@@ -1729,7 +1732,10 @@ async function exportDrawing(kind) {
       toast('Картинка скопирована — вставьте её в Discord или Telegram через Ctrl+V');
     } else {
       const p = await api.saveImage({ data, file: currentItem().path, time: video.currentTime });
-      if (p) toast('Кадр с рисунком сохранён', 'Показать в папке', () => api.reveal(p));
+      if (p) {
+        toast('Кадр с рисунком сохранён', 'Показать в папке', () => api.reveal(p));
+        offerDrag([p]);
+      }
     }
   } catch (e) {
     toast('Не получилось: ' + cleanErr(e));
@@ -2032,7 +2038,10 @@ async function exportMarkers(folder) {
     $('#mk-close').textContent = 'Закрыть';
     renderMarkerList();
   }
-  if (saved.length) toast(`Сохранено клипов: ${saved.length}`, 'Показать в папке', () => api.reveal(saved[0]));
+  if (saved.length) {
+    toast(`Сохранено клипов: ${saved.length}`, 'Показать в папке', () => api.reveal(saved[0]));
+    offerDrag(saved);
+  }
   return saved;
 }
 
@@ -2069,6 +2078,7 @@ async function concatMarkers(out) {
     $('#mk-status').textContent = `Готово: ${res.parts} ${plural(res.parts, 'фрагмент', 'фрагмента', 'фрагментов')} в одном ролике`;
     $('#mk-bar').style.width = '100%';
     toast('Ролик склеен: ' + api.basename(res.out), 'Показать в папке', () => api.reveal(res.out));
+    offerDrag([res.out]);
   } catch (e) {
     const msg = cleanErr(e);
     $('#mk-status').textContent = msg === 'Отменено' ? 'Остановлено' : 'Ошибка: ' + msg;
@@ -2086,6 +2096,55 @@ $('#mk-concat').onclick = async () => {
   if (out) concatMarkers(out);
 };
 $('#btn-markers').onclick = openMarkers;
+
+// ---------- dragging files out to Discord, Telegram, Explorer
+//
+// The drag itself is a native one started by the main process; while it runs the page's own
+// "drop to open" must stay quiet, so it is flagged until the mouse moves normally again.
+
+let draggingOut = false;
+
+function dragOut(e, file) {
+  e.preventDefault();
+  draggingOut = true;
+  api.startDrag(file);
+  setTimeout(() => document.addEventListener('mousemove', () => { draggingOut = false; }, { once: true }), 300);
+}
+
+const tray = { files: [] };
+const TRAY_ICON = { mp3: 'i-music', m4a: 'i-music', wav: 'i-music', flac: 'i-music', png: 'i-camera', jpg: 'i-camera' };
+
+// Freshly saved files wait in a small panel, ready to be dragged into a chat
+function offerDrag(files) {
+  tray.files = [...files, ...tray.files.filter(f => !files.includes(f))].slice(0, 5);
+  renderTray();
+}
+
+function renderTray() {
+  const el = $('#drag-tray');
+  const host = document.fullscreenElement || (currentView === 'library' ? $('#view-library') : $('#player'));
+  if (el.parentElement !== host) host.append(el);
+  const list = $('#tray-list');
+  list.innerHTML = '';
+  for (const f of tray.files) {
+    const ext = f.slice(f.lastIndexOf('.') + 1).toLowerCase();
+    const item = document.createElement('div');
+    item.className = 'tray-item';
+    item.draggable = true;
+    item.title = f + '\nПеретащите в окно чата · двойной клик — показать в папке';
+    item.innerHTML = `<svg class="i"><use href="#${TRAY_ICON[ext] || 'i-screen'}"/></svg><span></span>`;
+    item.querySelector('span').textContent = api.basename(f);
+    item.addEventListener('dragstart', e => dragOut(e, f));
+    item.ondblclick = () => api.reveal(f);
+    list.append(item);
+  }
+  el.hidden = !tray.files.length;
+}
+
+$('#tray-close').onclick = () => {
+  tray.files = [];
+  renderTray();
+};
 
 // ---------- small always-on-top window (picture-in-picture)
 

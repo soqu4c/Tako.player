@@ -453,6 +453,14 @@ async function libraryThumb(file) {
 
 ipcMain.handle('app-info', () => ({ version: app.getVersion() }));
 
+// Dragging a file out of the player into another program (Discord, Telegram, Explorer)
+let dragIcon = null;
+ipcMain.on('start-drag', (e, file) => {
+  if (typeof file !== 'string' || !fs.existsSync(file)) return;
+  if (!dragIcon) dragIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 48, height: 48 });
+  e.sender.startDrag({ file, icon: dragIcon });
+});
+
 // The main window steps aside while the video plays in the small always-on-top window
 ipcMain.on('win-minimize', () => { if (win) win.minimize(); });
 ipcMain.on('win-restore', () => {

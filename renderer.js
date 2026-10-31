@@ -1148,7 +1148,10 @@ async function screenshot() {
   video.pause();
   try {
     const p = await api.screenshot({ file: currentItem().path, time: video.currentTime });
-    if (p) toast('Кадр сохранён', 'Показать в папке', () => api.reveal(p));
+    if (p) {
+      toast('Кадр сохранён', 'Показать в папке', () => api.reveal(p));
+      offerDrag([p]);
+    }
   } catch (e) {
     toast('Не удалось сохранить кадр: ' + cleanErr(e));
   }
@@ -1420,6 +1423,7 @@ async function doExport() {
     });
     exDlg.close();
     toast('Сохранено: ' + api.basename(out), 'Показать в папке', () => api.reveal(out));
+    offerDrag([out]);
   } catch (e) {
     const msg = cleanErr(e);
     $('#ex-status').textContent = msg === 'Отменено' ? 'Отменено.' : 'Ошибка: ' + msg;
@@ -1502,13 +1506,20 @@ stage.addEventListener('wheel', e => {
 
 // drag & drop
 let dragDepth = 0;
-document.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('#drop').hidden = false; });
+// A file being dragged out of the player (draggingOut, ui.js) is not offered for opening
+document.addEventListener('dragenter', e => {
+  e.preventDefault();
+  if (draggingOut) return;
+  dragDepth++;
+  $('#drop').hidden = false;
+});
 document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').hidden = true; } });
 document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', async e => {
   e.preventDefault();
   dragDepth = 0;
   $('#drop').hidden = true;
+  if (draggingOut) return;
   const dropped = [...e.dataTransfer.files].map(f => api.pathForFile(f)).filter(Boolean);
   if (!dropped.length) return;
   const paths = await api.expandPaths(dropped);

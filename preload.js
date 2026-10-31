@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   frameThumb: opts => ipcRenderer.invoke('frame-thumb', opts),
   clearThumbs: () => ipcRenderer.invoke('clear-thumbs'),
   appInfo: () => ipcRenderer.invoke('app-info'),
+  startDrag: file => ipcRenderer.send('start-drag', file),
   winMinimize: () => ipcRenderer.send('win-minimize'),
   winRestore: () => ipcRenderer.send('win-restore'),
   obsTracks: () => ipcRenderer.invoke('obs-tracks'),

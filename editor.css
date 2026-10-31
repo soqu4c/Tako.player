@@ -18,6 +18,7 @@
 .ed {
   --head-w: 132px;
   --lane-h: 54px;
+  --lane-min: 22px;
   position: absolute;
   inset: 0;
   display: grid;
@@ -490,3 +491,13 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .ed-toggles button:active:not(.dis) { transform: scale(.92); }
 .ed-toggles button.dis { opacity: .35; cursor: default; }
 .ed-mark.sel { background: #ffd23f; box-shadow: 0 0 0 1px #fff; }
+
+/* minimized tracks (wrench → Свернуть все дорожки), as in Premiere */
+.ed.mini-tracks { --lane-h: var(--lane-min); }
+.ed.mini-tracks .ed-wave, .ed.mini-tracks .ed-strip, .ed.mini-tracks .ed-env, .ed.mini-tracks .ed-vol, .ed.mini-tracks .ed-fh, .ed.mini-tracks .ed-wave-note { display: none; }
+.ed.mini-tracks .ed-clip { top: 2px; bottom: 2px; border-radius: 4px; background: var(--cc) !important; }
+.ed.mini-tracks .ed-name { top: 2px; font-size: 10.5px; }
+.ed.mini-tracks .ed-trhead { font-size: 11px; }
+.ed.mini-tracks .ed-trhead input[type=range] { display: none; }
+.ed.mini-tracks .ed-trhead button { transform: scale(.8); }
+#ed-marquee { position: absolute; z-index: 5; border: 1px solid #4c9bff; background: rgba(76, 155, 255, .15); pointer-events: none; }

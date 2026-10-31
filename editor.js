@@ -767,13 +767,7 @@ lanesBox.addEventListener('pointerdown', e => {
   let el = e.target.closest('.ed-clip');
   // clips on a locked track cannot be picked or changed
   if (el && isLocked(ed.p.clips.find(x => x.id === Number(el.dataset.id)))) el = null;
-  if (!el) {
-    if (!e.shiftKey) ed.sel.clear();
-    seekEd(tOf(canvasX(e)));
-    renderTimeline();
-    renderInspector();
-    return;
-  }
+  if (!el) return marquee(e);
   const c = ed.p.clips.find(x => x.id === Number(el.dataset.id));
   if (ed.tool === 'razor') {
     // only the clicked track is cut; with Shift every unlocked track at that point
@@ -1967,3 +1961,88 @@ renderProjectSettings();
 setZoom(ed.pps);
 renderInspector();
 syncPreview(true);
+
+// ---------- marquee: drag over empty space to select every clip it touches (Shift adds);
+// a plain click there still moves the playhead
+function marquee(e) {
+  const canvas = $('#ed-canvas');
+  const cr = canvas.getBoundingClientRect();
+  const x0 = e.clientX - cr.left, y0 = e.clientY - cr.top;
+  const base = e.shiftKey ? new Set(ed.sel) : new Set();
+  let box = null;
+  const move = ev => {
+    const x1 = ev.clientX - cr.left, y1 = ev.clientY - cr.top;
+    if (!box) {
+      if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 4) return;
+      box = document.createElement('div');
+      box.id = 'ed-marquee';
+      canvas.append(box);
+    }
+    const l = Math.min(x0, x1), t = Math.min(y0, y1), w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+    Object.assign(box.style, { left: l + 'px', top: t + 'px', width: w + 'px', height: h + 'px' });
+    const r = { left: l + cr.left, right: l + w + cr.left, top: t + cr.top, bottom: t + h + cr.top };
+    ed.sel = new Set(base);
+    for (const el of lanesBox.querySelectorAll('.ed-clip')) {
+      const q = el.getBoundingClientRect();
+      if (q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom) {
+        const c = ed.p.clips.find(x => x.id === Number(el.dataset.id));
+        if (c && !isLocked(c)) ed.sel.add(c.id);
+      }
+    }
+    for (const el of lanesBox.querySelectorAll('.ed-clip')) el.classList.toggle('sel', ed.sel.has(Number(el.dataset.id)));
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    if (box) {
+      box.remove();
+    } else {
+      if (!e.shiftKey) ed.sel.clear();
+      seekEd(tOf(x0));
+    }
+    renderTimeline();
+    renderInspector();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+}
+
+// ---------- wrench: track height and links for the whole timeline
+function setMiniTracks(on) {
+  ed.miniTracks = on;
+  store('edMiniTracks', on);
+  $('.ed').classList.toggle('mini-tracks', on);
+  renderTimeline();
+}
+setMiniTracks(recall('edMiniTracks', false));
+
+function unlinkAll() {
+  const any = ed.p.clips.some(c => c.link);
+  if (!any) return toast('Связанных клипов нет.');
+  edCommit();
+  // only the selected ones when something is selected, otherwise every clip
+  const list = ed.sel.size ? ed.p.clips.filter(c => ed.sel.has(c.id)) : ed.p.clips;
+  for (const c of list) c.link = 0;
+  edChanged();
+  toast(ed.sel.size ? 'Выделенные клипы отвязаны.' : 'Все клипы отвязаны друг от друга.');
+}
+function linkSelected() {
+  const list = ed.p.clips.filter(c => ed.sel.has(c.id));
+  if (list.length < 2) return toast('Выделите хотя бы два клипа (рамкой или с Shift).');
+  edCommit();
+  const id = ed.nextId++;
+  for (const c of list) c.link = id;
+  edChanged();
+}
+
+$('#ed-wrench').onclick = e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  openCtxMenu(r.left, r.bottom + 4, [
+    ed.miniTracks
+      ? { icon: 'i-chevron', label: 'Развернуть все дорожки', run: () => setMiniTracks(false) }
+      : { icon: 'i-chevron', label: 'Свернуть все дорожки (минимализм)', run: () => setMiniTracks(true) },
+    '-',
+    { icon: 'i-link', label: ed.sel.size ? 'Отвязать выделенные клипы' : 'Отвязать все клипы', run: unlinkAll },
+    { icon: 'i-link', label: 'Связать выделенные клипы', run: linkSelected },
+  ]);
+};

@@ -10,6 +10,7 @@
 <body data-view="player">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 1-5-5L13 2.4l1.7 1.7-1 2.2 2.2-1z"/><path d="M3 21l6-6"/></symbol>
     <symbol id="i-pointer" viewBox="0 0 24 24"><path fill="currentColor" d="M5 2.5l13.5 12.2-6.3.6 3.7 7.1-2.6 1.3-3.7-7.2L5 21z"/></symbol>
     <symbol id="i-track-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="7" height="14" rx="1.5" stroke-dasharray="3 2.5"/><path d="M13 12h8"/><path d="M18 8l3 4-3 4"/></symbol>
     <symbol id="i-razor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 3.5l6 6-11 11-6-6z"/><path d="M11 7l6 6"/><circle cx="8.5" cy="15.5" r="1.2" fill="currentColor"/></symbol>
@@ -373,6 +374,8 @@
                 <button id="ed-redo" class="flip" title="Повторить (Ctrl+Shift+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
                 <button id="ed-split" title="Разрезать выделенный клип по линии (S); Shift — все дорожки"><svg class="i"><use href="#i-razor"/></svg></button>
                 <button id="ed-del" title="Удалить выделенное (Delete)"><svg class="i"><use href="#i-x"/></svg></button>
+                <span class="ed-sep"></span>
+                <button id="ed-wrench" title="Настройки таймлайна: свернуть или развернуть все дорожки, отвязать всё"><svg class="i"><use href="#i-wrench"/></svg></button>
               </div>
             </div>
             <div class="ed-tl-body">

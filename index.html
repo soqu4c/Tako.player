@@ -534,6 +534,58 @@
   </div>
 </dialog>
 
+<dialog id="ed-ex-dlg">
+  <h2>Экспорт ролика</h2>
+  <p class="hint" id="ed-ex-summary"></p>
+  <div class="ed-ex-grid">
+    <label>Формат
+      <select id="ed-ex-format">
+        <option value="mp4">MP4 — открывается везде</option>
+        <option value="mkv">MKV</option>
+      </select>
+    </label>
+    <label>Кодек
+      <select id="ed-ex-codec">
+        <option value="h264">H.264 — совместимый</option>
+        <option value="h265">H.265 — файл меньше</option>
+      </select>
+    </label>
+    <div class="wide">Качество видео
+      <span class="ed-ex-mode">
+        <label><input type="radio" name="ed-ex-mode" value="crf" checked>По качеству</label>
+        <label><input type="radio" name="ed-ex-mode" value="bitrate">По битрейту</label>
+      </span>
+    </div>
+    <label class="wide" id="ed-ex-crf-row">Качество: <b id="ed-ex-crf-text"></b>
+      <input type="range" id="ed-ex-crf" min="14" max="32" step="1">
+    </label>
+    <label class="wide" id="ed-ex-br-row" hidden>Битрейт видео, Мбит/с
+      <input type="number" id="ed-ex-br" class="time-input" min="1" max="150" step="1">
+    </label>
+    <label>Скорость кодирования
+      <select id="ed-ex-preset">
+        <option value="ultrafast">Очень быстро (файл больше)</option>
+        <option value="veryfast">Быстро</option>
+        <option value="fast">Средне</option>
+        <option value="medium">Медленно</option>
+        <option value="slow">Очень медленно (файл меньше)</option>
+      </select>
+    </label>
+    <label>Звук
+      <select id="ed-ex-abr">
+        <option value="128">128 кбит/с</option>
+        <option value="192">192 кбит/с</option>
+        <option value="256">256 кбит/с</option>
+        <option value="320">320 кбит/с</option>
+      </select>
+    </label>
+  </div>
+  <div class="actions">
+    <button id="ed-ex-cancel" class="btn">Отмена</button>
+    <button id="ed-ex-go" class="btn accent">Сохранить…</button>
+  </div>
+</dialog>
+
 <dialog id="confirm-dlg">
   <h2 id="confirm-title"></h2>
   <p id="confirm-text" class="hint"></p>

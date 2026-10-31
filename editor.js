@@ -7,28 +7,32 @@
 // media:  files added to the project, with what ffprobe told about them
 // clips:  { id, track, media, start, in, out, volume, fadeIn, fadeOut, link, audioK }
 //         text clips: { id, track: 'T1', start, in: 0, out: duration, text, size, color, pos, box, fadeIn, fadeOut }
-// A video file dropped on the timeline gives a video clip and its sound as a linked audio
-// clip; linked clips move, trim, split and get deleted together.
+// A video file dropped on the timeline gives a video clip and each of its sound tracks as
+// linked audio clips; linked clips move, trim and split together.
 
-const ED_TRACKS = [
+// Audio tracks are added as needed (an OBS recording can bring six at once)
+const BASE_TRACKS = [
   { id: 'T1', kind: 'text', name: 'Текст' },
   { id: 'V2', kind: 'video', name: 'Видео 2' },
   { id: 'V1', kind: 'video', name: 'Видео 1' },
-  { id: 'A1', kind: 'audio', name: 'Звук 1' },
-  { id: 'A2', kind: 'audio', name: 'Звук 2' },
-  { id: 'A3', kind: 'audio', name: 'Звук 3' },
 ];
+let ED_TRACKS = [];
 const trackOf = id => ED_TRACKS.find(t => t.id === id);
+const audioIds = () => ED_TRACKS.filter(t => t.kind === 'audio').map(t => t.id);
 const IMG_RE = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const IMAGE_DUR = 5;
 
+function setAudioCount(p, n) {
+  p.aCount = Math.max(3, n);
+  ED_TRACKS = [...BASE_TRACKS];
+  for (let k = 1; k <= p.aCount; k++) ED_TRACKS.push({ id: 'A' + k, kind: 'audio', name: 'Звук ' + k });
+  for (const t of ED_TRACKS) if (!p.tracks[t.id]) p.tracks[t.id] = { muted: false, hidden: false, volume: 1 };
+}
+
 function emptyProject() {
-  return {
-    w: 1920, h: 1080, fps: 30,
-    media: [],
-    clips: [],
-    tracks: Object.fromEntries(ED_TRACKS.map(t => [t.id, { muted: false, hidden: false, volume: 1 }])),
-  };
+  const p = { w: 1920, h: 1080, fps: 30, media: [], clips: [], tracks: {} };
+  setAudioCount(p, 3);
+  return p;
 }
 
 const ed = {
@@ -43,6 +47,7 @@ const ed = {
   nextId: 1,
 };
 for (const c of ed.p.clips) ed.nextId = Math.max(ed.nextId, c.id + 1);
+setAudioCount(ed.p, ed.p.aCount || 3);
 
 const edMedia = file => ed.p.media.find(m => m.path === file);
 const clipDur = c => c.out - c.in;
@@ -77,7 +82,9 @@ function edUndo(back = true) {
   if (!from.length) return;
   to.push(JSON.stringify(ed.p));
   ed.p = JSON.parse(from.pop());
+  setAudioCount(ed.p, ed.p.aCount || 3);
   ed.sel = new Set([...ed.sel].filter(id => ed.p.clips.some(c => c.id === id)));
+  renderHeads();
   edChanged();
 }
 
@@ -158,21 +165,29 @@ $('#ed-import').onclick = async () => {
   if (paths.length) edImport(paths);
 };
 
-// A file on the timeline: its picture on a video track and its sound on an audio track
+// A file on the timeline: its picture on a video track and every one of its sound tracks
+// on audio tracks of their own (more audio tracks appear when there are not enough)
 function edPlace(m, trackId, start) {
   edCommit();
   const dur = m.image ? IMAGE_DUR : m.dur;
-  const link = m.video && m.audio.length ? ed.nextId : 0;
+  const sounds = m.image ? [] : m.audio;
+  const link = m.video && sounds.length ? ed.nextId : 0;
   const made = [];
   const base = { media: m.path, start: Math.max(0, start), in: 0, out: dur, volume: 1, fadeIn: 0, fadeOut: 0, link };
-  // the other half goes to the first track of its kind that is free there
-  const order = { video: ['V1', 'V2'], audio: ['A1', 'A2', 'A3'] };
-  const free = kind => order[kind].find(id => !ed.p.clips.some(c => c.track === id && c.start < base.start + dur && clipEnd(c) > base.start));
-  const pick = kind => (trackId && trackOf(trackId).kind === kind ? trackId : free(kind) || order[kind][0]);
-  const vTrack = pick('video');
-  const aTrack = pick('audio');
+  const isFree = id => !ed.p.clips.some(c => c.track === id && c.start < base.start + dur && clipEnd(c) > base.start);
+  const vTrack = trackId && trackOf(trackId).kind === 'video' ? trackId : ['V1', 'V2'].find(isFree) || 'V1';
+  // sound: from the lane it was dropped on (or the first free one) downwards, skipping busy ones
+  let aTracks = [];
+  if (sounds.length) {
+    const first = trackId && trackOf(trackId).kind === 'audio' ? Number(trackId.slice(1)) : 1;
+    for (let k = first; aTracks.length < sounds.length; k++) {
+      if (k > ed.p.aCount) setAudioCount(ed.p, k);
+      if (isFree('A' + k) || (k === first && trackId && trackId[0] === 'A')) aTracks.push('A' + k);
+    }
+    renderHeads();
+  }
   if (m.video) made.push({ ...base, id: ed.nextId++, track: vTrack });
-  if (m.audio.length && !m.image) made.push({ ...base, id: ed.nextId++, track: aTrack, audioK: 0 });
+  sounds.forEach((_, k) => made.push({ ...base, id: ed.nextId++, track: aTracks[k], audioK: k }));
   ed.p.clips.push(...made);
   // the first video sets the frame size and rate of the project
   if (m.video && !ed.p.clips.some(c => c.track[0] === 'V' && !made.includes(c)) && m.video.w && m.video.h && !m.image) {
@@ -183,7 +198,7 @@ function edPlace(m, trackId, start) {
     }
   }
   resolveOverlaps(made);
-  ed.sel = new Set(made.map(c => c.id));
+  ed.sel = new Set([made[0].id]);
   edChanged();
   renderProjectSettings();
 }
@@ -301,13 +316,71 @@ function clipEl(c, tr) {
   el.style.width = Math.max(4, xOf(clipDur(c))) + 'px';
   const m = edMedia(c.media);
   const label = tr.kind === 'text' ? c.text.split('\n')[0] || 'Текст' : (m ? m.name : '?');
-  el.innerHTML = '<span class="ed-name"></span><i class="ed-edge l"></i><i class="ed-edge r"></i>';
+  el.innerHTML = '<span class="ed-name"></span><i class="ed-edge l"></i><i class="ed-edge r"></i>'
+    + '<i class="ed-fh l" title="Тяните вправо — плавное появление"></i><i class="ed-fh r" title="Тяните влево — плавное затухание"></i>';
   el.querySelector('.ed-name').textContent = label + (c.volume !== 1 && tr.kind === 'audio' ? `  ${Math.round(c.volume * 100)}%` : '');
-  if (c.fadeIn > 0) el.style.setProperty('--fi', xOf(c.fadeIn) + 'px');
-  if (c.fadeOut > 0) el.style.setProperty('--fo', xOf(c.fadeOut) + 'px');
-  el.classList.toggle('fi', c.fadeIn > 0);
-  el.classList.toggle('fo', c.fadeOut > 0);
+  const fi = xOf(c.fadeIn || 0), fo = xOf(c.fadeOut || 0);
+  el.querySelector('.ed-fh.l').style.left = fi + 'px';
+  el.querySelector('.ed-fh.r').style.right = fo + 'px';
+  if (tr.kind === 'audio') {
+    // waveform, and over it the loudness line that bends down into the fades
+    const w = Math.max(4, xOf(clipDur(c)));
+    const cv = document.createElement('canvas');
+    cv.className = 'ed-wave';
+    el.prepend(cv);
+    drawClipWave(cv, c, w);
+    const y = (1 - c.volume / 2) * 100;
+    el.insertAdjacentHTML('beforeend', `<svg class="ed-env" viewBox="0 0 ${w} 100" preserveAspectRatio="none"><polyline points="0,${c.fadeIn ? 100 : y} ${fi},${y} ${w - fo},${y} ${w},${c.fadeOut ? 100 : y}"/></svg>`
+      + `<i class="ed-vol" style="top: calc(${y}% - 4px); left: ${fi}px; right: ${fo}px" title="Тяните вверх или вниз — громкость (${Math.round(c.volume * 100)}%)"></i>`);
+  } else {
+    if (c.fadeIn > 0) el.style.setProperty('--fi', fi + 'px');
+    if (c.fadeOut > 0) el.style.setProperty('--fo', fo + 'px');
+    el.classList.toggle('fi', c.fadeIn > 0);
+    el.classList.toggle('fo', c.fadeOut > 0);
+  }
   return el;
+}
+
+// ---------- waveforms of audio clips
+//
+// The whole file's peaks come from main.js (all its sound tracks are read in one pass and
+// cached); a clip draws the part between its in and out points.
+
+const edWaves = new Map(); // "path|index" -> peaks, or 'loading'
+const wavePoints = m => clamp(Math.round(m.dur * 20), 200, 40000);
+
+function drawClipWave(cv, c, w) {
+  const m = edMedia(c.media);
+  const a = m && m.audio[c.audioK || 0];
+  if (!a) return;
+  const key = `${m.path}|${a.index}`;
+  const peaks = edWaves.get(key);
+  if (!peaks) {
+    edWaves.set(key, 'loading');
+    api.waveform({ id: newJob(), file: m.path, index: a.index, points: wavePoints(m) })
+      .then(p => { edWaves.set(key, p); renderTimeline(); })
+      .catch(() => edWaves.delete(key));
+    return;
+  }
+  if (peaks === 'loading') return;
+  const width = Math.min(Math.round(w), 8000);
+  const h = 34;
+  cv.width = width;
+  cv.height = h;
+  const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(0, 0, 0, .3)';
+  const per = peaks.length / m.dur; // points per second of the file
+  // quiet recordings are drawn taller, so their shape is still visible
+  if (peaks.max == null) peaks.max = peaks.reduce((a, b) => Math.max(a, b), 0);
+  const gain = Math.min(8, 0.95 / Math.max(0.01, peaks.max));
+  for (let x = 0; x < width; x++) {
+    const t0 = c.in + (x / width) * clipDur(c);
+    const t1 = c.in + ((x + 1) / width) * clipDur(c);
+    let v = 0;
+    for (let i = Math.floor(t0 * per), e = Math.max(i + 1, Math.ceil(t1 * per)); i < e && i < peaks.length; i++) v = Math.max(v, peaks[i]);
+    const bar = Math.max(1, Math.min(1, v * gain) * h);
+    g.fillRect(x, (h - bar) / 2, 1, bar);
+  }
 }
 
 function placePlayhead() {
@@ -366,17 +439,61 @@ lanesBox.addEventListener('pointerdown', e => {
     splitClips([c], snap(tOf(canvasX(e)), snapPoints(new Set([c.id]))).t);
     return;
   }
-  if (e.shiftKey || e.ctrlKey) {
-    for (const x of linked(c)) ed.sel.has(c.id) ? ed.sel.delete(x.id) : ed.sel.add(x.id);
-  } else if (!ed.sel.has(c.id)) ed.sel = new Set(linked(c).map(x => x.id));
+  // a click picks just this clip; its linked halves still move with it
+  if (e.shiftKey || e.ctrlKey) ed.sel.has(c.id) ? ed.sel.delete(c.id) : ed.sel.add(c.id);
+  else ed.sel = new Set([c.id]);
   renderTimeline();
   renderInspector();
+  if (e.target.classList.contains('ed-vol')) return dragLevel(e, c);
+  if (e.target.classList.contains('ed-fh')) return dragFade(e, c, e.target.classList.contains('l') ? 'fadeIn' : 'fadeOut');
   const edge = e.target.classList.contains('ed-edge') ? (e.target.classList.contains('l') ? 'l' : 'r') : null;
   dragClips(e, c, edge);
 });
 
+// The volume line on a clip: up is louder (top = 200%, middle = 100%)
+function dragLevel(e, c) {
+  edCommit();
+  lanesBox.setPointerCapture(e.pointerId);
+  const move = ev => {
+    // the clip is redrawn on every step, so its box is looked up each time
+    const r = lanesBox.querySelector(`.ed-clip[data-id="${c.id}"]`).getBoundingClientRect();
+    c.volume = Math.round(clamp(2 * (1 - (ev.clientY - r.top) / r.height), 0, 2) * 100) / 100;
+    renderTimeline();
+    renderInspector();
+    syncPreview(false);
+  };
+  const up = () => {
+    lanesBox.removeEventListener('pointermove', move);
+    lanesBox.removeEventListener('pointerup', up);
+    edChanged();
+  };
+  lanesBox.addEventListener('pointermove', move);
+  lanesBox.addEventListener('pointerup', up);
+}
+
+// The round handles in the top corners: pull inwards for a fade in or out
+function dragFade(e, c, key) {
+  edCommit();
+  lanesBox.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const x = tOf(canvasX(ev));
+    const v = key === 'fadeIn' ? x - c.start : clipEnd(c) - x;
+    c[key] = Math.round(clamp(v, 0, clipDur(c) / 2) * 10) / 10;
+    renderTimeline();
+    renderInspector();
+  };
+  const up = () => {
+    lanesBox.removeEventListener('pointermove', move);
+    lanesBox.removeEventListener('pointerup', up);
+    edChanged();
+  };
+  lanesBox.addEventListener('pointermove', move);
+  lanesBox.addEventListener('pointerup', up);
+}
+
 function dragClips(e, c, edge) {
-  const group = edge ? linked(c) : ed.p.clips.filter(x => ed.sel.has(x.id));
+  const picked = ed.p.clips.filter(x => ed.sel.has(x.id));
+  const group = edge ? linked(c) : [...new Set(picked.flatMap(linked))];
   const orig = new Map(group.map(x => [x.id, { ...x }]));
   const ids = new Set(group.map(x => x.id));
   const pts = snapPoints(ids);
@@ -510,13 +627,50 @@ $('.ed-bin').addEventListener('drop', e => {
 
 function addText() {
   edCommit();
-  const c = { id: ed.nextId++, track: 'T1', start: ed.t, in: 0, out: 4, text: 'Новый текст', size: 72, color: 'white', pos: 'bottom', box: false, fadeIn: 0.3, fadeOut: 0.3, volume: 1 };
+  const c = { id: ed.nextId++, track: 'T1', start: ed.t, in: 0, out: 4, text: 'Новый текст', size: 72, color: 'white', x: 0.5, y: 0.85, box: false, fadeIn: 0, fadeOut: 0, volume: 1 };
   ed.p.clips.push(c);
   resolveOverlaps([c]);
   ed.sel = new Set([c.id]);
   edChanged();
   const ta = $('#ed-insp-body textarea');
   if (ta) { ta.focus(); ta.select(); }
+}
+
+// Where a title's centre is, as parts of the frame (older titles only had top/centre/bottom)
+const titleXY = c => (c.x != null ? [c.x, c.y] : [0.5, { top: 0.12, center: 0.5 }[c.pos] || 0.85]);
+
+function dragTitle(e, c, d) {
+  e.stopPropagation();
+  if (!ed.sel.has(c.id)) {
+    ed.sel = new Set([c.id]);
+    renderTimeline();
+    renderInspector();
+  }
+  const r = $('#ed-screen').getBoundingClientRect();
+  const [x0, y0] = titleXY(c);
+  const sx = e.clientX, sy = e.clientY;
+  let moved = false;
+  d.setPointerCapture(e.pointerId);
+  d.onpointermove = ev => {
+    if (!moved) {
+      if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3) return;
+      edCommit();
+      moved = true;
+    }
+    // centre lines pull the text in, like guides
+    let x = clamp(x0 + (ev.clientX - sx) / r.width, 0, 1);
+    let y = clamp(y0 + (ev.clientY - sy) / r.height, 0, 1);
+    if (Math.abs(x - 0.5) * r.width < 6) x = 0.5;
+    if (Math.abs(y - 0.5) * r.height < 6) y = 0.5;
+    c.x = x;
+    c.y = y;
+    d.style.left = x * 100 + '%';
+    d.style.top = y * 100 + '%';
+  };
+  d.onpointerup = () => {
+    d.onpointermove = d.onpointerup = null;
+    if (moved) edChanged();
+  };
 }
 
 // ---------- inspector
@@ -590,11 +744,17 @@ function renderInspector() {
       color.append(b);
     }
     field('Цвет', color);
-    const pos = document.createElement('select');
-    pos.innerHTML = '<option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option>';
-    pos.value = c.pos;
-    pos.onchange = () => { edCommit(); c.pos = pos.value; edChanged(); };
-    field('Где', pos);
+    // the text itself is dragged on the picture; these put it in a usual place
+    const pos = document.createElement('div');
+    pos.className = 'ed-pos';
+    for (const [label, x, y] of [['Сверху', 0.5, 0.12], ['По центру', 0.5, 0.5], ['Снизу', 0.5, 0.85]]) {
+      const b = document.createElement('button');
+      b.className = 'btn small';
+      b.textContent = label;
+      b.onclick = () => { edCommit(); Object.assign(c, { x, y }); edChanged(); };
+      pos.append(b);
+    }
+    field('Где — или перетащите текст на картинке', pos);
     const box = document.createElement('input');
     box.type = 'checkbox';
     box.checked = c.box;
@@ -748,9 +908,15 @@ function syncPreview(force) {
   if (!ed.p.tracks.T1.hidden) {
     for (const c of ed.p.clips.filter(x => x.track === 'T1' && x.start <= t && clipEnd(x) > t)) {
       const d = document.createElement('div');
-      d.className = `ed-title ${c.pos}`;
+      d.className = 'ed-title';
       d.classList.toggle('box', c.box);
+      d.classList.toggle('sel', ed.sel.has(c.id));
       d.textContent = c.text;
+      const [x, y] = titleXY(c);
+      d.style.left = x * 100 + '%';
+      d.style.top = y * 100 + '%';
+      d.onpointerdown = e => dragTitle(e, c, d);
+      d.onclick = e => e.stopPropagation();
       // sizes are given for a 1080 px high frame
       d.style.fontSize = `calc(${c.size / 1080} * var(--ed-h))`;
       d.style.color = c.color;
@@ -918,23 +1084,67 @@ function exportSpec() {
   }
   if (!ed.p.tracks.T1.hidden) {
     for (const c of ed.p.clips.filter(x => x.track === 'T1' && x.text.trim())) {
-      spec.texts.push({ text: c.text, start: c.start, dur: clipDur(c), size: c.size, color: c.color, pos: c.pos, box: c.box, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
+      const [x, y] = titleXY(c);
+      spec.texts.push({ text: c.text, start: c.start, dur: clipDur(c), size: c.size, color: c.color, x, y, box: c.box, fadeIn: c.fadeIn, fadeOut: c.fadeOut });
     }
   }
   return spec;
 }
 
+// Export settings, remembered between projects
+const edEnc = Object.assign({ format: 'mp4', codec: 'h264', mode: 'crf', crf: 20, vbitrate: 12, preset: 'veryfast', abitrate: 192 }, recall('edExport', {}));
+const crfWord = v => (v <= 17 ? 'почти без потерь' : v <= 20 ? 'высокое' : v <= 24 ? 'хорошее' : v <= 28 ? 'среднее' : 'низкое, файл маленький');
+
+function renderExportForm() {
+  $('#ed-ex-format').value = edEnc.format;
+  $('#ed-ex-codec').value = edEnc.codec;
+  document.querySelector(`input[name=ed-ex-mode][value=${edEnc.mode}]`).checked = true;
+  $('#ed-ex-crf').value = edEnc.crf;
+  $('#ed-ex-crf-text').textContent = `${crfWord(edEnc.crf)} (CRF ${edEnc.crf})`;
+  $('#ed-ex-br').value = edEnc.vbitrate;
+  $('#ed-ex-preset').value = edEnc.preset;
+  $('#ed-ex-abr').value = String(edEnc.abitrate);
+  $('#ed-ex-crf-row').hidden = edEnc.mode !== 'crf';
+  $('#ed-ex-br-row').hidden = edEnc.mode !== 'bitrate';
+  const T = edDuration();
+  let text = `${ed.p.w}×${ed.p.h}, ${ed.p.fps} к/с, длина ${fmt(T)}.`;
+  if (edEnc.mode === 'bitrate') text += ` Примерный размер: ${fmtSize((edEnc.vbitrate * 1000 + edEnc.abitrate) * 125 * T)}.`;
+  $('#ed-ex-summary').textContent = text;
+}
+for (const id of ['#ed-ex-format', '#ed-ex-codec', '#ed-ex-crf', '#ed-ex-br', '#ed-ex-preset', '#ed-ex-abr']) {
+  $(id).addEventListener('input', () => {
+    edEnc.format = $('#ed-ex-format').value;
+    edEnc.codec = $('#ed-ex-codec').value;
+    edEnc.crf = Number($('#ed-ex-crf').value);
+    edEnc.vbitrate = clamp(Number($('#ed-ex-br').value) || 12, 1, 150);
+    edEnc.preset = $('#ed-ex-preset').value;
+    edEnc.abitrate = Number($('#ed-ex-abr').value);
+    store('edExport', edEnc);
+    renderExportForm();
+  });
+}
+for (const r of document.querySelectorAll('input[name=ed-ex-mode]')) {
+  r.onchange = () => { edEnc.mode = r.value; store('edExport', edEnc); renderExportForm(); };
+}
+$('#ed-ex-cancel').onclick = () => $('#ed-ex-dlg').close();
+
 let edJob = null;
-$('#ed-export').onclick = async () => {
+$('#ed-export').onclick = () => {
   if (!edDuration()) {
     toast('Таймлайн пуст — перетащите на него файлы из «Медиа».');
     return;
   }
   edPause();
+  renderExportForm();
+  $('#ed-ex-dlg').showModal();
+};
+
+$('#ed-ex-go').onclick = async () => {
+  $('#ed-ex-dlg').close();
   const first = ed.p.clips.find(c => c.media) || {};
-  const out = await api.saveDialog({ source: first.media || 'C:\\video.mp4', ext: 'mp4', name: 'Проект Tako' });
+  const out = await api.saveDialog({ source: first.media || 'C:\\video.mp4', ext: edEnc.format, name: 'Проект Tako' });
   if (!out) return;
-  const spec = { ...exportSpec(), out };
+  const spec = { ...exportSpec(), out, enc: { ...edEnc } };
   edJob = newJob();
   spec.jobId = edJob;
   $('#ed-progress').hidden = false;

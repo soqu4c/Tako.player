@@ -1240,10 +1240,12 @@ ipcMain.handle('editor-export', async (_e, o) => {
     fs.writeFileSync(file, t.text, 'utf8');
     const s = t.start, e = t.start + t.dur;
     const size = Math.round(t.size * h / 1080);
-    const y = t.pos === 'top' ? `h*0.08` : t.pos === 'center' ? `(h-text_h)/2` : `h-text_h-h*0.08`;
+    // x and y are where the text's centre is, as parts of the frame
+    const x = `w*${num(t.x)}-text_w/2`;
+    const y = `h*${num(t.y)}-text_h/2`;
     const fi = Math.max(0.001, t.fadeIn || 0), fo = Math.max(0.001, t.fadeOut || 0);
     const alpha = `if(lt(t,${num(s + fi)}),(t-${num(s)})/${num(fi)},if(gt(t,${num(e - fo)}),(${num(e)}-t)/${num(fo)},1))`;
-    let f = `[${base}]drawtext=fontfile='${FONT}':textfile='${ffPath(file)}':fontsize=${size}:fontcolor=${t.color}:x=(w-text_w)/2:y=${y}:line_spacing=${Math.round(size * 0.2)}:enable='between(t,${num(s)},${num(e)})':alpha='${alpha}'`;
+    let f = `[${base}]drawtext=fontfile='${FONT}':textfile='${ffPath(file)}':fontsize=${size}:fontcolor=${t.color}:x=${x}:y=${y}:line_spacing=${Math.round(size * 0.2)}:enable='between(t,${num(s)},${num(e)})':alpha='${alpha}'`;
     if (t.box) f += `:box=1:boxcolor=black@0.55:boxborderw=${Math.round(size * 0.35)}`;
     graph.push(`${f}[txt${k}]`);
     base = `txt${k}`;
@@ -1263,9 +1265,21 @@ ipcMain.handle('editor-export', async (_e, o) => {
   else graph.push(`anullsrc=r=48000:cl=stereo[aout]`);
   const script = path.join(tmp, 'graph.txt');
   fs.writeFileSync(script, graph.join(';\n'), 'utf8');
+  // Encoding from the export window: H.264 or H.265, by quality (CRF) or by bitrate
+  const enc = o.enc || {};
+  const h265 = enc.codec === 'h265';
+  const vArgs = ['-c:v', h265 ? 'libx265' : 'libx264', '-preset', enc.preset || 'veryfast'];
+  if (enc.mode === 'bitrate') {
+    const k = Math.round((enc.vbitrate || 8) * 1000);
+    vArgs.push('-b:v', `${k}k`, '-maxrate', `${Math.round(k * 1.5)}k`, '-bufsize', `${k * 2}k`);
+  } else vArgs.push('-crf', String(enc.crf || (h265 ? 24 : 20)));
+  if (h265 && /\.mp4$/i.test(o.out)) vArgs.push('-tag:v', 'hvc1'); // so Windows and phones play it
+  if (h265) vArgs.push('-x265-params', 'log-level=error');
   args.push('-filter_complex_script', script, '-map', '[vout]', '-map', '[aout]', '-t', num(T),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(o.crf || 20), '-pix_fmt', 'yuv420p', '-r', String(fps),
-    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out);
+    ...vArgs, '-pix_fmt', 'yuv420p', '-r', String(fps),
+    '-c:a', 'aac', '-b:a', `${enc.abitrate || 192}k`);
+  if (/\.mp4$/i.test(o.out)) args.push('-movflags', '+faststart');
+  args.push(o.out);
   try {
     await run(FFMPEG, args, { jobId: o.jobId, duration: T });
   } finally {

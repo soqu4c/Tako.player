@@ -44,7 +44,7 @@ const I18N_EN = {
   'Назад (←)': 'Back (←)',
   'Вперёд (→)': 'Forward (→)',
   'Без звука (M)': 'Mute (M)',
-  'Громкость до 200% (↑ ↓, колесо мыши)': 'Volume up to 200% (↑ ↓, mouse wheel)',
+  'Громкость до 200% (↑ ↓, колесо мыши; правый клик — 100%)': 'Volume up to 200% (↑ ↓, mouse wheel; right click — 100%)',
   'Нажмите, чтобы показать миллисекунды': 'Click to show milliseconds',
   'Аудиодорожка (A)': 'Audio track (A)',
   'Дорожки: подписать или удалить из файла (N)': 'Tracks: name them or remove from the file (N)',

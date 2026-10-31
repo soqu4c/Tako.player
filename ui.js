@@ -32,6 +32,7 @@ const DEFAULTS = {
   resume: true, autoplay: true, autoNext: true, seekStep: 5,
   accent: 'salsa', preview: true, hideDelay: 2.5, motion: true, splash: true,
   subSize: 'm', subColor: '#ffffff', subBg: 'soft', obsNames: true,
+  discord: true, discordName: false,
 };
 const settings = { ...DEFAULTS, ...recall('settings', {}) };
 
@@ -61,6 +62,7 @@ function setSetting(key, value) {
   store('settings', settings);
   applySettings();
   if (key === 'obsNames' && state.info) refreshTrackLabels();
+  if (key.startsWith('discord')) updateDiscord();
 }
 
 // Marks a data action as done right on its button (toasts sit behind the modal)
@@ -84,6 +86,8 @@ const SETTING_TABS = [
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },
+      { key: 'discord', type: 'toggle', label: 'Статус в Discord', hint: '«Смотрит Tako.player» и название папки — например, игры из OBS. Работает, когда Discord запущен' },
+      { key: 'discordName', type: 'toggle', label: 'Показывать в статусе название файла', hint: 'Иначе видно только название папки' },
       { key: 'splash', type: 'toggle', label: 'Заставка при запуске', hint: 'Пока проверяются обновления, она всё равно ненадолго видна' },
     ],
   },
@@ -1469,6 +1473,43 @@ window.addEventListener('keydown', e => {
   else if (!ctrl && DRAW_KEYS[e.code]) setDrawTool(DRAW_KEYS[e.code]);
 }, true);
 
+// ---------- Discord status
+
+const DISCORD_ICON = 'https://raw.githubusercontent.com/soqu4c/Tako.player/main/assets/icon.png';
+const DISCORD_BUTTON = { label: 'Скачать Tako.player', url: 'https://github.com/soqu4c/Tako.player/releases/latest' };
+const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+// What the status shows: the folder (OBS sorts recordings by game) or the file name,
+// a running progress bar while playing, "on pause" otherwise
+function discordActivity() {
+  const base = { assets: { large_image: DISCORD_ICON, large_text: 'Tako.player' }, buttons: [DISCORD_BUTTON] };
+  const item = currentItem();
+  if (!state.info || !item) return { ...base, type: 3, details: 'Выбирает, что посмотреть' };
+  const folder = item.path.split(/[\\/]/).slice(-2, -1)[0] || '';
+  const name = item.name.replace(/\.[^.]+$/, '');
+  const activity = {
+    ...base,
+    type: state.videoStream ? 3 : 2, // watching / listening
+    details: cut(settings.discordName ? name : folder || (state.videoStream ? 'Видео' : 'Музыка'), 128),
+  };
+  if (settings.discordName && folder) activity.state = cut(folder, 128);
+  const d = duration();
+  if (!video.paused && d) {
+    const now = Date.now();
+    const rate = video.playbackRate || 1;
+    activity.timestamps = { start: Math.round(now - video.currentTime * 1000 / rate), end: Math.round(now + (d - video.currentTime) * 1000 / rate) };
+  } else {
+    activity.state = settings.discordName && folder ? cut(`${folder} · на паузе`, 128) : 'На паузе';
+  }
+  return activity;
+}
+
+function updateDiscord() {
+  api.discordActivity({ enabled: settings.discord, activity: settings.discord ? discordActivity() : null });
+}
+
+for (const ev of ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata', 'emptied']) video.addEventListener(ev, updateDiscord);
+
 // ---------- updates
 
 let upd = { status: 'idle' };
@@ -1520,6 +1561,7 @@ $('#update-btn').onclick = () => api.updateInstall();
 
 applySettings();
 setCollapsed(!!recall('ctlMini', false));
+updateDiscord();
 api.obsTracks().then(d => {
   obsTracks = d;
   if (state.info) refreshTrackLabels();

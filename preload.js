@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   startupSkip: () => ipcRenderer.invoke('startup-skip'),
   openProject: () => ipcRenderer.invoke('open-project'),
   openDonate: () => ipcRenderer.invoke('open-donate'),
+  discordActivity: data => ipcRenderer.send('discord-activity', data),
   pickSubtitle: () => ipcRenderer.invoke('pick-subtitle'),
   loadSubtitle: file => ipcRenderer.invoke('load-subtitle', file),
   probe: file => ipcRenderer.invoke('probe', file),

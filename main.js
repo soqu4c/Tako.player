@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const net = require('net');
 const { spawn } = require('child_process');
 
 const FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
@@ -219,6 +220,84 @@ ipcMain.handle('update-check', () => {
 ipcMain.handle('update-install', () => {
   // Silent install, then the new version starts by itself
   if (updater && updateState.status === 'ready') updater.quitAndInstall(true, true);
+});
+
+// ---------- Discord status (Rich Presence through Discord's local IPC pipe)
+//
+// Frames are an 8-byte header (opcode, length, little-endian) and JSON. The page sends the
+// activity it wants shown; it is pushed at most every few seconds, the newest one winning.
+
+const DISCORD_CLIENT_ID = '1565895532579389470';
+const DISCORD_PUSH_MS = 4000;
+let rpc = null; // { sock, ready }
+let rpcActivity = null;
+let rpcEnabled = false;
+let rpcLastPush = 0;
+let rpcPushTimer = null;
+
+function rpcFrame(op, data) {
+  const json = Buffer.from(JSON.stringify(data));
+  const head = Buffer.alloc(8);
+  head.writeInt32LE(op, 0);
+  head.writeInt32LE(json.length, 4);
+  return Buffer.concat([head, json]);
+}
+
+// Discord listens on the first free pipe of discord-ipc-0…9
+function rpcConnect(pipe = 0) {
+  if (rpc || !rpcEnabled || !DISCORD_CLIENT_ID || pipe > 9) return;
+  const sock = net.connect(`\\\\?\\pipe\\discord-ipc-${pipe}`);
+  let connected = false;
+  let buf = Buffer.alloc(0);
+  sock.on('error', () => {
+    sock.destroy();
+    if (!connected) rpcConnect(pipe + 1);
+  });
+  sock.on('connect', () => {
+    connected = true;
+    rpc = { sock, ready: false };
+    sock.write(rpcFrame(0, { v: 1, client_id: DISCORD_CLIENT_ID }));
+  });
+  sock.on('data', d => {
+    buf = Buffer.concat([buf, d]);
+    while (buf.length >= 8 && buf.length >= 8 + buf.readInt32LE(4)) {
+      const op = buf.readInt32LE(0);
+      const len = buf.readInt32LE(4);
+      let msg = {};
+      try {
+        msg = JSON.parse(buf.subarray(8, 8 + len).toString('utf8'));
+      } catch {}
+      buf = buf.subarray(8 + len);
+      if (op === 3) sock.write(rpcFrame(4, msg)); // ping -> pong
+      else if (op === 2) sock.end(); // Discord closed the connection
+      else if (msg.evt === 'READY' && rpc && rpc.sock === sock) {
+        rpc.ready = true;
+        rpcPush(true);
+      }
+    }
+  });
+  sock.on('close', () => { if (rpc && rpc.sock === sock) rpc = null; });
+}
+
+function rpcPush(now = false) {
+  if (!rpc || !rpc.ready) return;
+  clearTimeout(rpcPushTimer);
+  const wait = now ? 0 : Math.max(0, rpcLastPush + DISCORD_PUSH_MS - Date.now());
+  rpcPushTimer = setTimeout(() => {
+    if (!rpc || !rpc.ready) return;
+    rpcLastPush = Date.now();
+    rpc.sock.write(rpcFrame(1, { cmd: 'SET_ACTIVITY', args: { pid: process.pid, activity: rpcActivity }, nonce: String(rpcLastPush) }));
+  }, wait);
+}
+
+// Discord may start after the player, so keep looking for it while the status is on
+setInterval(() => rpcConnect(), 30000);
+
+ipcMain.on('discord-activity', (_e, { enabled, activity }) => {
+  rpcEnabled = !!enabled;
+  rpcActivity = rpcEnabled ? activity : null;
+  if (!rpc) rpcConnect();
+  else rpcPush();
 });
 
 const PROJECT_URL = 'https://github.com/soqu4c/Tako.player';

@@ -3,6 +3,22 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.3',
+    date: '2026-11-01',
+    sections: [
+      [['Видеоредактор', 'Video editor'], [
+        ['Переходы между клипами: наплыв и затемнение — правый клик по клипу или «Скорость и переход» в эффектах', 'Transitions between clips: cross dissolve and dip to black — right click a clip, or “Speed and transition” in the effects'],
+        ['Скорость клипа от 10% до 1000%, звук без изменения тона', 'Clip speed from 10% to 1000%, sound keeps its pitch'],
+        ['Вкладка «История»: все шаги по названиям, к любому можно вернуться', 'The History tab: every step by name, go back to any of them'],
+        ['Готовые настройки экспорта: YouTube, Shorts / TikTok, Discord до 10 и 50 МБ — и свои, под своим названием', 'Export presets: YouTube, Shorts / TikTok, Discord up to 10 and 50 MB — and your own, under your own name'],
+        ['Короткое обучение при первом открытии (кнопка «?»), «Сообщить об ошибке»', 'A short tour on first opening (the “?” button), “Report a problem”'],
+      ]],
+      [['Плеер', 'Player'], [
+        ['Всё из 1.3.3: оформление к Хеллоуину, «Сообщить об ошибке»', 'Everything from 1.3.3: the Halloween look, “Report a problem”'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0-beta.2',
     date: '2026-11-01',
     sections: [
@@ -28,6 +44,18 @@ const CHANGELOG = [
       ]],
       [['Плеер', 'Player'], [
         ['Несколько звуковых дорожек одновременно — кнопка «+» у дорожек или Shift+A', 'Several sound tracks at once — the “+” button by the tracks or Shift+A'],
+      ]],
+    ],
+  },
+  {
+    version: '1.3.3',
+    date: '2026-11-01',
+    sections: [
+      [['Хеллоуин 🎃', 'Halloween 🎃'], [
+        ['С 24 октября по 2 ноября — летучие мыши, паутина и тыквенные цвета. Выключается в Настройки → Интерфейс', 'From October 24 to November 2 — bats, cobwebs and pumpkin colors. Switch it off in Settings → Interface'],
+      ]],
+      [['Сообщить об ошибке', 'Report a problem'], [
+        ['Настройки → О программе → «Сообщить об ошибке»: откроется страница на GitHub, где уже указаны версия и последние ошибки программы', 'Settings → About → “Report a problem”: opens a GitHub page with the version and the program’s recent errors already filled in'],
       ]],
     ],
   },

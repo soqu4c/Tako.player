@@ -333,6 +333,7 @@ function parseTc(s) {
 const timelineLength = () => Math.max(edDuration() + 30, tOf(scroller.clientWidth) + 5);
 
 function renderRuler() {
+  renderHeadButtons();
   const ruler = $('#ed-ruler');
   ruler.innerHTML = '';
   const total = timelineLength();
@@ -361,7 +362,18 @@ function renderRuler() {
     mk.className = 'ed-mark';
     mk.style.left = xOf(markDrag && markDrag.from === t ? markDrag.to : t) + 'px';
     mk.title = `Метка ${tc(t)} — тяните, чтобы сдвинуть; клик: перейти; двойной клик: удалить`;
-    mk.onpointerdown = e => dragMarker(e, t);
+    mk.classList.toggle('sel', ed.markSel === t);
+    mk.onpointerdown = e => { if (e.button === 0) dragMarker(e, t); else e.stopPropagation(); };
+    mk.oncontextmenu = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ed.markSel = t;
+      renderRuler();
+      openCtxMenu(e.clientX, e.clientY, [
+        { icon: 'i-x', label: 'Удалить метку', danger: true, run: () => removeMarker(t) },
+        { icon: 'i-x', label: 'Удалить все метки (Ctrl+Alt+M)', danger: true, run: clearMarkers },
+      ]);
+    };
     mk.ondblclick = e => {
       e.stopPropagation();
       edCommit();
@@ -396,12 +408,32 @@ function dragMarker(e, t) {
     showSnap(null);
     const to = markDrag ? markDrag.to : t;
     markDrag = null;
-    if (!moved) return seekEd(t);
+    if (!moved) {
+      // a click picks the mark (Delete removes it) and moves the playhead to it
+      ed.markSel = t;
+      seekEd(t);
+      renderRuler();
+      return;
+    }
     ed.p.markers = [...new Set(ed.p.markers.map(x => (x === t ? Math.round(to * 1000) / 1000 : x)))].sort((a, b) => a - b);
     edChanged();
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
+}
+
+function removeMarker(t) {
+  edCommit();
+  ed.p.markers = (ed.p.markers || []).filter(x => x !== t);
+  if (ed.markSel === t) ed.markSel = null;
+  edChanged();
+}
+function clearMarkers() {
+  if (!(ed.p.markers || []).length) return;
+  edCommit();
+  ed.p.markers = [];
+  ed.markSel = null;
+  edChanged();
 }
 
 function addMarker() {
@@ -411,7 +443,17 @@ function addMarker() {
 }
 $('#ed-marker').onclick = addMarker;
 
+// Buttons above the tracks show whether they can do something now
+function renderHeadButtons() {
+  const sel = ed.p.clips.some(c => ed.sel.has(c.id));
+  $('#ed-undo').classList.toggle('dis', !ed.undo.length);
+  $('#ed-redo').classList.toggle('dis', !ed.redo.length);
+  $('#ed-split').classList.toggle('dis', !sel);
+  $('#ed-del').classList.toggle('dis', !sel && ed.markSel == null);
+}
+
 function renderTimeline() {
+  renderHeadButtons();
   // frames asked for by the previous drawing but not taken yet may be off screen now
   for (const q of thumbQueue) edThumbs.delete(q.key);
   thumbQueue.length = 0;
@@ -719,6 +761,7 @@ const partners = c => (ed.linkMove ? linked(c) : [c]).filter(x => !isLocked(x));
 
 lanesBox.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
+  if (ed.markSel != null) { ed.markSel = null; renderRuler(); }
   if (ed.tool === 'hand') return panTimeline(e);
   if (ed.tool === 'track') return trackSelect(e);
   let el = e.target.closest('.ed-clip');
@@ -1693,7 +1736,7 @@ function setTool(tool) {
 }
 for (const b of document.querySelectorAll('[data-edtool]')) b.onclick = () => setTool(b.dataset.edtool);
 $('#ed-split').onclick = e => splitAtPlayhead(e.shiftKey);
-$('#ed-del').onclick = deleteSelected;
+$('#ed-del').onclick = () => (ed.markSel != null ? removeMarker(ed.markSel) : deleteSelected());
 $('#ed-text').onclick = addText;
 $('#ed-undo').onclick = () => edUndo(true);
 $('#ed-redo').onclick = () => edUndo(false);
@@ -1714,8 +1757,8 @@ document.addEventListener('keydown', e => {
     KeyM: addMarker,
     Backslash: zoomToFit,
     KeyT: addText,
-    Delete: deleteSelected,
-    Backspace: deleteSelected,
+    Delete: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
+    Backspace: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
     Home: () => seekEd(0),
     End: () => seekEd(edDuration()),
     ArrowLeft: () => seekEd(ed.t - (e.shiftKey ? 1 : frame)),
@@ -1725,7 +1768,8 @@ document.addEventListener('keydown', e => {
     Escape: () => { ed.sel.clear(); renderTimeline(); renderInspector(); },
   };
   let fn = keys[e.code];
-  if (ctrl) {
+  if (ctrl && e.altKey && e.code === 'KeyM') fn = clearMarkers;
+  else if (ctrl) {
     fn = { KeyZ: () => edUndo(!e.shiftKey), KeyY: () => edUndo(false), KeyA: () => { ed.sel = new Set(ed.p.clips.map(c => c.id)); renderTimeline(); renderInspector(); }, KeyC: copySelected, KeyV: pasteClips, KeyM: () => $('#ed-export').click(), KeyI: () => $('#ed-import').click(), KeyX: () => { copySelected(); deleteSelected(); } }[e.code];
   }
   if (!fn) return;

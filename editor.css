@@ -482,3 +482,11 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .fx-check { grid-template-columns: 18px 1fr auto !important; }
 .fx-where { display: flex; gap: 4px; margin: 6px 0 0 26px; }
 .fx-row select { grid-column: 3 / -1; }
+
+/* state of the buttons above the tracks */
+.ed-toggles button.on { color: #fff; background: #2d6fe0; }
+.ed-toggles button:not(.dis):hover { background: rgba(255, 255, 255, .16); color: var(--text); }
+.ed-toggles button:not(.on):not(.dis) { color: var(--soft); }
+.ed-toggles button:active:not(.dis) { transform: scale(.92); }
+.ed-toggles button.dis { opacity: .35; cursor: default; }
+.ed-mark.sel { background: #ffd23f; box-shadow: 0 0 0 1px #fff; }

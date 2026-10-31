@@ -43,6 +43,7 @@
       "renderer.js",
       "ui.js",
       "i18n.js",
+      "changelog.js",
       "index.html",
       "styles.css",
       "assets/**",

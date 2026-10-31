@@ -1324,3 +1324,29 @@ body.mini #controls { left: 6px; right: 6px; bottom: 6px; padding: 2px 8px 4px; 
 body.mini #controls #timeline { margin-right: 0; }
 body.mini .row.main .group.right > :not(#btn-pip), body.mini #btn-back, body.mini #btn-fwd, body.mini .vol { display: none; }
 body.mini #time { font-size: 11px; }
+
+/* ---------- what's new */
+
+.news-link {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--soft);
+  font-size: 12.5px;
+  background: rgba(var(--accent-rgb), .1);
+  border: 1px solid rgba(var(--accent-rgb), .25);
+}
+.news-link .i { width: 14px; height: 14px; color: rgb(var(--accent-rgb)); }
+.news-link:hover { color: var(--text); background: rgba(var(--accent-rgb), .18); }
+#news-dlg { width: min(600px, 92vw); }
+#news-body { max-height: 58vh; overflow-y: auto; padding-right: 6px; outline: none; }
+.news-ver { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 6px; }
+.news-ver b { font-size: 15px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.news-ver span { color: var(--muted); font-size: 12px; }
+.news-ver:not(:first-child) { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+#news-body h4 { margin: 12px 0 5px; font-size: 13px; font-weight: 600; }
+#news-body ul { margin: 0; padding-left: 18px; color: var(--soft); }
+#news-body li { margin: 3px 0; line-height: 1.45; }

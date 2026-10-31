@@ -204,10 +204,11 @@ async function renderSettings(tabId = settingsTab) {
     panel.innerHTML = `<div class="about"><img src="assets/logo.png" alt=""><span class="app-name">Tako<span class="app-suffix">.player</span></span>
       <div>Версия ${version}</div><div>Видео, музыка, обрезка и дорожки — без лишнего.</div><small>Работает на Electron и FFmpeg</small>
       <div class="about-update"><span id="about-update-text"></span>
-        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div>
+        <div class="about-links"><button id="about-check" class="btn small"></button><button id="about-news" class="btn small">Что нового</button><button id="about-project" class="btn small ghost">Страница проекта на GitHub</button></div></div>
       <div class="donate"><div>Нравится плеер? Можно поддержать автора — это помогает делать Tako лучше.</div>
         <button id="about-donate" class="btn accent"><svg class="i"><use href="#i-heart"/></svg>Поддержать автора</button></div></div>`;
     $('#about-project').onclick = () => api.openProject();
+    $('#about-news').onclick = () => openNews();
     $('#about-donate').onclick = () => api.openDonate();
     $('#about-check').onclick = () => (upd.status === 'ready' ? api.updateInstall() : api.updateCheck());
     renderUpdate(upd);
@@ -2425,3 +2426,69 @@ $('#splash-skip').onclick = () => api.startupSkip();
 api.startupGate().catch(() => {}).then(() => {
   setTimeout(hideSplash, Math.max(0, splashMin - (performance.now() - splashShown)));
 });
+
+// ---------- what's new
+//
+// After an update the notes of the new version (and of any skipped ones) open once; they can
+// be read again from the start screen and from Settings → About.
+
+const newerThan = (a, b) => {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+const tr = pair => pair[I18N_LANG === 'en' ? 1 : 0];
+
+function renderNews(entries) {
+  const body = $('#news-body');
+  body.innerHTML = '';
+  for (const e of entries) {
+    const head = document.createElement('div');
+    head.className = 'news-ver';
+    head.innerHTML = '<b></b><span></span>';
+    head.querySelector('b').textContent = (I18N_LANG === 'en' ? 'Version ' : 'Версия ') + e.version;
+    head.querySelector('span').textContent = new Date(e.date).toLocaleDateString(I18N_LANG === 'en' ? 'en-GB' : 'ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    body.append(head);
+    for (const [title, items] of e.sections) {
+      const h = document.createElement('h4');
+      h.textContent = tr(title);
+      const ul = document.createElement('ul');
+      for (const item of items) {
+        const li = document.createElement('li');
+        li.textContent = tr(item);
+        ul.append(li);
+      }
+      body.append(h, ul);
+    }
+  }
+  body.scrollTop = 0;
+}
+
+// Only the versions after `since` (just the newest one when it is not known)
+function openNews(since) {
+  const entries = since ? CHANGELOG.filter(e => newerThan(e.version, since)) : CHANGELOG.slice(0, 1);
+  renderNews(entries.length ? entries : CHANGELOG.slice(0, 1));
+  $('#news-all').hidden = entries.length >= CHANGELOG.length;
+  $('#news-dlg').showModal();
+}
+$('#news-all').onclick = () => {
+  renderNews(CHANGELOG);
+  $('#news-all').hidden = true;
+};
+$('#news-close').onclick = () => $('#news-dlg').close();
+$('#btn-news').onclick = () => openNews();
+
+api.appInfo().then(({ version }) => {
+  const seen = recall('seenVersion', null);
+  // Someone who used the player before this was remembered is updating, not installing
+  const usedBefore = ['settings', 'positions', 'libraryFolders', 'opened'].some(k => recall(k, null) != null);
+  store('seenVersion', version);
+  const latest = CHANGELOG.find(e => !newerThan(e.version, version));
+  if (latest) {
+    $('#btn-news span').textContent = (I18N_LANG === 'en' ? 'What’s new in ' : 'Что нового в версии ') + latest.version;
+    $('#btn-news').hidden = false;
+  }
+  if (seen === version || (!seen && !usedBefore) || !latest) return;
+  // after the splash, so the notes are not hidden under it
+  api.startupGate().catch(() => {}).then(() => setTimeout(() => openNews(seen && newerThan(version, seen) ? seen : null), splashMin + 400));
+}).catch(() => {});

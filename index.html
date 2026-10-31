@@ -96,6 +96,7 @@
               <button id="btn-open-folder-big" class="btn"><svg class="i"><use href="#i-folder"/></svg>Открыть папку</button>
               <button id="btn-go-library" class="btn ghost"><svg class="i"><use href="#i-grid"/></svg>Библиотека</button>
             </div>
+            <button id="btn-news" class="news-link" hidden><svg class="i"><use href="#i-refresh"/></svg><span></span></button>
             <div id="recent-wrap" hidden>
               <div class="section-head"><div class="section-title">Продолжить просмотр</div><button id="recent-clear" class="btn ghost small">Очистить</button></div>
               <div id="recent" class="cards"></div>
@@ -437,6 +438,16 @@
   </div>
 </dialog>
 
+<dialog id="news-dlg">
+  <h2>Что нового</h2>
+  <div id="news-body"></div>
+  <div class="actions">
+    <button id="news-all" class="btn ghost">Все версии</button>
+    <span class="spacer"></span>
+    <button id="news-close" class="btn accent">Понятно</button>
+  </div>
+</dialog>
+
 <dialog id="confirm-dlg">
   <h2 id="confirm-title"></h2>
   <p id="confirm-text" class="hint"></p>
@@ -543,6 +554,7 @@
 
 <script src="i18n.js"></script>
 <script src="renderer.js"></script>
+<script src="changelog.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

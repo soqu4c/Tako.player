@@ -1358,7 +1358,9 @@ body.mini #time { font-size: 11px; }
 .hw-only, .hw-bats, .hw-web { display: none; }
 body.halloween .hw-only { display: block; }
 body.halloween .hw-bats { display: block; position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-body.halloween .hw-web { display: block; position: absolute; top: 0; right: 0; width: 170px; height: 170px; color: rgba(255, 255, 255, .13); pointer-events: none; }
+/* the cobweb hangs from the top right corner over the whole screen */
+body.halloween .hw-web { display: block; position: absolute; inset: 0; width: 100%; height: 100%; color: rgba(255, 255, 255, .07); pointer-events: none; }
+.hw-web path { vector-effect: non-scaling-stroke; }
 body.halloween .empty-glow { background: radial-gradient(closest-side, rgba(255, 122, 24, .22), rgba(163, 92, 255, .12) 55%, transparent); }
 .hw-greet { margin: -4px 0 10px; font-size: 15px; font-weight: 600; background: linear-gradient(90deg, #ff7a18, #c07bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hw-bat { position: absolute; width: 46px; height: 23px; color: rgba(176, 136, 230, .55); filter: drop-shadow(0 0 8px rgba(163, 92, 255, .6)); animation: hw-fly 22s linear infinite, hw-flap .35s ease-in-out infinite alternate; }

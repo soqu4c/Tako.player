@@ -2399,27 +2399,79 @@ const EX_PRESETS = [
     return { w: m ? m.video.w : ed.p.w, h: m ? m.video.h : ed.p.h, fps: (m && m.video.fps) || ed.p.fps, enc: { codec: 'h264', profile: 'high', mode: 'crf', crf: 17, preset: 'fast', abitrate: 256, format: 'mp4' } };
   }],
 ];
-for (const [name, title, make] of EX_PRESETS) {
-  const b = document.createElement('button');
-  b.className = 'btn small ghost';
-  b.textContent = name;
-  b.title = title;
-  b.onclick = () => {
-    const p = make();
-    if (!p) return;
-    Object.assign(edEnc, p.enc);
-    if (p.w !== ed.p.w || p.h !== ed.p.h || p.fps !== ed.p.fps) {
-      edCommit();
-      Object.assign(ed.p, { w: p.w, h: p.h, fps: p.fps });
-      store('edProject', ed.p);
-      renderProjectSettings();
-    }
-    store('edExport', edEnc);
-    renderExportForm();
-    toast(`${name}: ${title}`);
-  };
-  $('#ed-ex-presets').append(b);
+function applyPreset(name, title, p) {
+  if (!p) return;
+  Object.assign(edEnc, p.enc);
+  if (p.w !== ed.p.w || p.h !== ed.p.h || p.fps !== ed.p.fps) {
+    edCommit();
+    Object.assign(ed.p, { w: p.w, h: p.h, fps: p.fps });
+    store('edProject', ed.p);
+    renderProjectSettings();
+  }
+  store('edExport', edEnc);
+  renderExportForm();
+  toast(`${name}: ${title}`);
 }
+// The person's own settings, saved under a name next to the ready ones
+const ENC_KEYS = ['format', 'codec', 'profile', 'mode', 'crf', 'vbitrate', 'vmax', 'preset', 'abitrate'];
+const presetText = p => `${p.w}×${p.h}, ${fpsText(p.fps)} к/с, ${p.enc.codec === 'h265' ? 'H.265' : 'H.264'}, `
+  + (p.enc.mode === 'crf' ? `CRF ${p.enc.crf}` : `${p.enc.vbitrate} Мбит/с`) + `, звук ${p.enc.abitrate} кбит/с`;
+function renderPresets() {
+  const box = $('#ed-ex-presets');
+  box.innerHTML = '';
+  const add = (name, title, make, remove) => {
+    const b = document.createElement('button');
+    b.className = 'btn small ghost' + (remove ? ' mine' : '');
+    b.textContent = name;
+    b.title = title;
+    b.onclick = () => applyPreset(name, title, make());
+    if (remove) {
+      const x = document.createElement('i');
+      x.textContent = '×';
+      x.title = 'Удалить эту настройку';
+      x.onclick = e => { e.stopPropagation(); remove(); };
+      b.append(x);
+    }
+    box.append(b);
+  };
+  for (const [name, title, make] of EX_PRESETS) add(name, title, make);
+  const mine = recall('edMyPresets', []);
+  mine.forEach((p, k) => add(p.name, presetText(p), () => p, () => {
+    mine.splice(k, 1);
+    store('edMyPresets', mine);
+    renderPresets();
+  }));
+  const save = document.createElement('button');
+  save.className = 'btn small';
+  save.textContent = '+ Сохранить мои';
+  save.title = 'Запомнить текущие размер, частоту кадров, кодек, битрейт и звук под своим названием';
+  save.onclick = () => {
+    const inp = document.createElement('input');
+    inp.className = 'time-input ed-ex-name';
+    inp.placeholder = 'Название, Enter — сохранить';
+    inp.maxLength = 40;
+    save.replaceWith(inp);
+    inp.focus();
+    inp.onkeydown = e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); renderPresets(); }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const name = inp.value.trim();
+      if (!name) return;
+      const enc = {};
+      for (const k of ENC_KEYS) enc[k] = edEnc[k];
+      const list = recall('edMyPresets', []).filter(p => p.name !== name); // the same name is replaced
+      list.push({ name, w: ed.p.w, h: ed.p.h, fps: ed.p.fps, enc });
+      store('edMyPresets', list);
+      renderPresets();
+      toast(`Настройка «${name}» сохранена`);
+    };
+    inp.onblur = () => setTimeout(() => { if (inp.isConnected) renderPresets(); }, 150);
+  };
+  box.append(save);
+}
+renderPresets();
 
 let edJob = null;
 $('#ed-export').onclick = () => {

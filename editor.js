@@ -85,6 +85,7 @@ function edUndo(back = true) {
   setAudioCount(ed.p, ed.p.aCount || 3);
   ed.sel = new Set([...ed.sel].filter(id => ed.p.clips.some(c => c.id === id)));
   renderHeads();
+  renderBin();
   edChanged();
 }
 
@@ -146,15 +147,19 @@ function renderBin() {
       e.dataTransfer.effectAllowed = 'copy';
     });
     row.ondblclick = () => edPlace(m, null, edDuration());
-    row.querySelector('button').onclick = e => {
+    row.querySelector('button').onclick = async e => {
       e.stopPropagation();
-      if (ed.p.clips.some(c => c.media === m.path)) {
-        toast('Этот файл есть на таймлайне — сначала удалите его клипы.');
-        return;
-      }
-      ed.p.media = ed.p.media.filter(x => x !== m);
-      store('edProject', ed.p);
-      renderBin();
+      // only the project forgets the file; the file itself stays on disk
+      const drop = () => {
+        edCommit();
+        ed.p.media = ed.p.media.filter(x => x !== m);
+        ed.p.clips = ed.p.clips.filter(c => c.media !== m.path);
+        ed.sel = new Set([...ed.sel].filter(id => ed.p.clips.some(c => c.id === id)));
+        renderBin();
+        edChanged();
+      };
+      const n = ed.p.clips.filter(c => c.media === m.path).length;
+      if (!n || await confirmDialog('Убрать файл из проекта?', `Его клипы на таймлайне (${n}) тоже уберутся. Сам файл на диске останется.`, 'Убрать')) drop();
     };
     box.append(row);
   }
@@ -1003,7 +1008,8 @@ $('#ed-fps').onchange = e => {
   ed.p.fps = Number(e.target.value);
   store('edProject', ed.p);
 };
-$('#ed-new').onclick = () => confirmDialog('Новый проект?', 'Таймлайн и список медиа очистятся. Исходные файлы не пострадают.', () => {
+$('#ed-new').onclick = async () => {
+  if (!(await confirmDialog('Новый проект?', 'Таймлайн и список медиа очистятся. Исходные файлы не пострадают.', 'Начать новый'))) return;
   edPause();
   edCommit();
   ed.p = emptyProject();
@@ -1013,7 +1019,7 @@ $('#ed-new').onclick = () => confirmDialog('Новый проект?', 'Тайм
   renderHeads();
   renderProjectSettings();
   edChanged();
-});
+};
 
 // ---------- toolbar and keys
 

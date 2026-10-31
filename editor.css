@@ -543,3 +543,9 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 .keys-tabs { display: flex; gap: 4px; margin: -6px 0 12px; }
 .keys-tabs button { padding: 6px 14px; border-radius: 8px; color: var(--soft); background: rgba(255,255,255,.04); font-weight: 600; font-size: 12.5px; }
 .keys-tabs button.on { color: #fff; background: rgba(var(--accent-rgb), .3); }
+.ed-preview:fullscreen { background: #000; border: 0; border-radius: 0; }
+.ed-preview:fullscreen .ed-tabs { display: none; }
+#btn-mixlisten { position: relative; }
+#btn-mixlisten.on { color: rgb(var(--accent-rgb)); }
+#mixlisten-n { position: absolute; top: -4px; right: -6px; font-size: 9px; font-weight: 700; padding: 1px 3px; border-radius: 5px; background: var(--grad); color: #fff; }
+#ed-zoom-badge { position: absolute; right: 10px; top: 10px; z-index: 6; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font: 600 11.5px Consolas, monospace; }

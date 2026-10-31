@@ -1923,6 +1923,8 @@ document.addEventListener('keydown', e => {
     KeyM: addMarker,
     Backslash: zoomToFit,
     F1: () => $('#help-dlg').showModal(),
+    KeyF: edFullscreen,
+    KeyZ: () => edViewReset(),
     KeyT: addText,
     Delete: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
     Backspace: () => (ed.markSel != null && (ed.p.markers || []).includes(ed.markSel) ? removeMarker(ed.markSel) : deleteSelected()),
@@ -1932,7 +1934,7 @@ document.addEventListener('keydown', e => {
     ArrowRight: () => seekEd(ed.t + (e.shiftKey ? 1 : frame)),
     Equal: () => setZoom(ed.pps * 1.3),
     Minus: () => setZoom(ed.pps / 1.3),
-    Escape: () => { ed.sel.clear(); renderTimeline(); renderInspector(); },
+    Escape: () => { if (document.fullscreenElement) return document.exitFullscreen(); ed.sel.clear(); renderTimeline(); renderInspector(); },
   };
   let fn = keys[e.code];
   if (ctrl && e.altKey && e.code === 'KeyM') fn = clearMarkers;
@@ -2253,3 +2255,52 @@ lanesBox.addEventListener('dblclick', e => {
   c.volume = 1;
   edChanged();
 });
+
+// Program monitor on the whole screen (the picture and its buttons)
+function edFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else $('.ed-preview').requestFullscreen().catch(() => {});
+}
+$('#ed-full').onclick = edFullscreen;
+document.addEventListener('fullscreenchange', () => setTimeout(fitScreen, 50));
+$('#ed-screen').ondblclick = edFullscreen;
+
+// Program monitor: Ctrl + wheel zooms the view toward the mouse (only the view, not the
+// edit); drag with the middle button or Space+drag... kept simple: double click on the zoom
+// badge or Z puts it back to fit
+const edView = { k: 1, x: 0, y: 0 };
+function applyEdView() {
+  $('#ed-screen').style.transform = `translate(calc(-50% + ${edView.x}px), calc(-50% + ${edView.y}px)) scale(${edView.k})`;
+  $('#ed-zoom-badge').hidden = edView.k === 1;
+  $('#ed-zoom-badge').textContent = Math.round(edView.k * 100) + '%';
+}
+$('#ed-screen-wrap').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  const r = $('#ed-screen-wrap').getBoundingClientRect();
+  const mx = e.clientX - (r.left + r.width / 2), my = e.clientY - (r.top + r.height / 2);
+  const k = clamp(edView.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2), 1, 8);
+  edView.x = mx - (mx - edView.x) * (k / edView.k);
+  edView.y = my - (my - edView.y) * (k / edView.k);
+  edView.k = k < 1.02 ? 1 : k;
+  if (edView.k === 1) edView.x = edView.y = 0;
+  applyEdView();
+}, { passive: false });
+// a zoomed view is moved by dragging with the right mouse button
+$('#ed-screen-wrap').addEventListener('pointerdown', e => {
+  if (e.button !== 2 || edView.k === 1) return;
+  const x0 = e.clientX - edView.x, y0 = e.clientY - edView.y, w = e.currentTarget;
+  w.setPointerCapture(e.pointerId);
+  w.onpointermove = ev => { edView.x = ev.clientX - x0; edView.y = ev.clientY - y0; applyEdView(); };
+  w.onpointerup = () => { w.onpointermove = w.onpointerup = null; };
+});
+$('#ed-screen-wrap').addEventListener('contextmenu', e => { if (edView.k !== 1) e.preventDefault(); });
+const edViewReset = () => { Object.assign(edView, { k: 1, x: 0, y: 0 }); applyEdView(); };
+{
+  const b = document.createElement('button');
+  b.id = 'ed-zoom-badge';
+  b.title = 'Сбросить приближение (Z)';
+  b.hidden = true;
+  b.onclick = edViewReset;
+  $('#ed-screen-wrap').append(b);
+}

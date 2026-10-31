@@ -163,6 +163,7 @@
             <div class="group right">
               <label class="pick" title="Аудиодорожка (A)"><svg class="i"><use href="#i-audio"/></svg><select id="audio-select"><option>—</option></select></label>
               <button id="btn-names" class="icon sm" title="Дорожки: подписать или удалить из файла (N)"><svg class="i"><use href="#i-edit"/></svg></button>
+              <button id="btn-mixlisten" class="icon sm" title="Слушать несколько дорожек сразу (Shift+A)"><svg class="i"><use href="#i-plus"/></svg><span id="mixlisten-n" hidden></span></button>
               <label class="pick" title="Субтитры (S)"><svg class="i"><use href="#i-cc"/></svg><select id="sub-select"><option value="off">Выкл</option></select></label>
               <select id="speed" class="chip" title="Скорость ( [ и ] )">
                 <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option>
@@ -342,6 +343,7 @@
                 <button id="ed-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="ed-play-icon" href="#i-play"/></svg></button>
                 <button id="ed-ffwd" class="icon sm" title="Кадр вперёд (→)"><svg class="i"><use href="#i-fwd"/></svg></button>
                 <button id="ed-end" class="icon sm" title="В конец (End)"><svg class="i"><use href="#i-next"/></svg></button>
+                <button id="ed-full" class="icon sm" title="Просмотр на весь экран (Ctrl+F; Esc — выйти)"><svg class="i"><use href="#i-full"/></svg></button>
               </span>
               <span id="ed-time" class="ed-mon-dur" title="Длина монтажа">00:00:00:00</span>
             </div>

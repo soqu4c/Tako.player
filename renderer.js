@@ -461,6 +461,23 @@ function selectAudio(k) {
 // The video keeps playing muted and the audio element is kept in sync with it.
 
 const feeds = new Map(); // feed id -> AudioStream
+// Other tracks of the file played at the same time as the chosen one (k -> AudioStream)
+const extraTracks = new Map();
+
+function toggleExtraTrack(k) {
+  if (!state.info || k === state.audioK) return;
+  if (extraTracks.has(k)) {
+    extraTracks.get(k).destroy();
+    extraTracks.delete(k);
+  } else {
+    const s = new AudioStream(currentItem().path, state.audioStreams[k].index, k);
+    extraTracks.set(k, s);
+    s.start(video.currentTime);
+  }
+  applyVolume();
+  syncExt(true);
+  osd(extraTracks.size ? `Слышно дорожек: ${extraTracks.size + 1}` : 'Одна дорожка');
+}
 
 class AudioStream {
   constructor(file, index, k) {
@@ -633,8 +650,10 @@ function routeAudio(k, prevK = k) {
 }
 
 function syncExt(hard) {
-  const s = state.ext;
-  if (!s) return;
+  for (const s of [state.ext, ...extraTracks.values()]) if (s) syncOne(s, hard);
+}
+
+function syncOne(s, hard) {
   const el = s.el;
   const vt = video.currentTime;
   const playing = !video.paused && !video.seeking && video.readyState >= 3;
@@ -675,6 +694,18 @@ function audioTick() {
       p.maintain();
     }
   }
+  // tracks heard together with the main one
+  for (const [k, x] of extraTracks) {
+    if (x.failed || !currentItem() || x.file !== currentItem().path || k === state.audioK) {
+      if (x.failed) toast('Не удалось добавить дорожку: ' + x.failed);
+      x.destroy();
+      extraTracks.delete(k);
+      applyVolume();
+    } else {
+      syncOne(x, false);
+      x.maintain();
+    }
+  }
   const s = state.ext;
   if (s && s.failed) {
     toast('Ошибка звуковой дорожки: ' + s.failed);
@@ -689,7 +720,7 @@ setInterval(audioTick, 200);
 // After a jump outside what is buffered, restart the feed from the new position
 video.addEventListener('seeking', () => {
   const t = video.currentTime;
-  for (const s of [state.ext, state.pendingExt]) {
+  for (const s of [state.ext, state.pendingExt, ...extraTracks.values()]) {
     if (s && !s.covers(t)) s.start(t);
   }
   syncExt();
@@ -984,7 +1015,7 @@ function applyVolume() {
     boost.gain = boost.ctx.createGain();
     boost.gain.connect(boost.ctx.destination);
   }
-  const els = [video, ...[state.ext, state.pendingExt].filter(Boolean).map(s => s.el)];
+  const els = [video, ...[state.ext, state.pendingExt, ...extraTracks.values()].filter(Boolean).map(s => s.el)];
   if (boost.ctx) {
     els.forEach(boostWire);
     boost.gain.gain.value = volume;
@@ -993,7 +1024,7 @@ function applyVolume() {
   const elVolume = boost.ctx ? 1 : volume;
   video.volume = elVolume;
   video.muted = state.ext ? true : muted;
-  for (const s of [state.ext, state.pendingExt]) {
+  for (const s of [state.ext, state.pendingExt, ...extraTracks.values()]) {
     if (!s) continue;
     s.el.volume = elVolume;
     s.el.muted = muted;
@@ -1616,7 +1647,7 @@ document.addEventListener('keydown', e => {
     KeyF: toggleFullscreen,
     BracketLeft: () => changeSpeed(-1),
     BracketRight: () => changeSpeed(1),
-    KeyA: () => selectAudio((state.audioK + 1) % Math.max(1, state.audioStreams.length)),
+    KeyA: () => (e.shiftKey ? $('#btn-mixlisten').click() : selectAudio((state.audioK + 1) % Math.max(1, state.audioStreams.length))),
     KeyS: () => (e.shiftKey ? openAsr() : cycleSub()),
     KeyI: () => { setIn(video.currentTime); osd('Начало: ' + fmtPrecise(video.currentTime)); },
     KeyO: () => { setOut(video.currentTime); osd('Конец: ' + fmtPrecise(video.currentTime)); },
@@ -1652,10 +1683,10 @@ document.addEventListener('keydown', e => {
     KeyI: showInfo,
     KeyL: () => showView(currentView === 'library' ? 'player' : 'library'),
     Comma: openSettings,
-    Equal: () => zoomBy(1.25),
-    NumpadAdd: () => zoomBy(1.25),
-    Minus: () => zoomBy(1 / 1.25),
-    NumpadSubtract: () => zoomBy(1 / 1.25),
+    Equal: () => zoomBy(1.25, ...cursorAt()),
+    NumpadAdd: () => zoomBy(1.25, ...cursorAt()),
+    Minus: () => zoomBy(1 / 1.25, ...cursorAt()),
+    NumpadSubtract: () => zoomBy(1 / 1.25, ...cursorAt()),
     Digit0: resetZoom,
   };
   const fn = ctrl ? ctrlHandlers[e.code] : handlers[e.code];
@@ -1672,3 +1703,29 @@ state.muted = !!recall('muted', false);
 applyVolume();
 renderPlaylist();
 updateProgress();
+
+// The "+" next to the track list: pick more tracks to hear at once
+function mixListenMenu(x, y) {
+  if (!state.info || state.audioStreams.length < 2) return toast('В этом файле одна звуковая дорожка.');
+  openCtxMenu(x, y, state.audioStreams.map((a, k) => ({
+    icon: k === state.audioK || extraTracks.has(k) ? 'i-vol' : 'i-mute',
+    label: (k === state.audioK ? '● ' : extraTracks.has(k) ? '✓ ' : '   ') + streamLabel(a, k) + (k === state.audioK ? ' — основная' : ''),
+    run: () => { toggleExtraTrack(k); renderMixListen(); },
+  })));
+}
+function renderMixListen() {
+  const n = extraTracks.size;
+  $('#mixlisten-n').hidden = !n;
+  $('#mixlisten-n').textContent = '+' + n;
+  $('#btn-mixlisten').classList.toggle('on', !!n);
+}
+$('#btn-mixlisten').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); mixListenMenu(r.left, r.top - 8 - 36 * state.audioStreams.length); };
+setInterval(renderMixListen, 1000);
+// double click on the volume slider: back to 100%
+$('#volume').addEventListener('dblclick', () => setVolume(1));
+
+// Keyboard zoom goes toward the mouse when it is over the picture, like the wheel does
+let lastMouse = null;
+$('#stage').addEventListener('pointermove', e => { lastMouse = [e.clientX, e.clientY]; });
+$('#stage').addEventListener('pointerleave', () => { lastMouse = null; });
+const cursorAt = () => lastMouse || [];

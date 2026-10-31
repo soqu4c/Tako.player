@@ -318,14 +318,14 @@ function openSettings() {
 let currentView = 'player';
 
 function moveIndicator() {
-  const btn = $(currentView === 'library' ? '#nav-library' : '#nav-player');
+  const btn = $('#nav-' + currentView);
   $('.rail-indicator').style.transform = `translateY(${btn.offsetTop}px)`;
 }
 
 function showView(v) {
   currentView = v;
   document.body.dataset.view = v;
-  for (const name of ['player', 'library']) {
+  for (const name of ['player', 'library', 'editor']) {
     $('#view-' + name).classList.toggle('active', v === name);
     $('#nav-' + name).classList.toggle('active', v === name);
   }

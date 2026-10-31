@@ -1576,7 +1576,7 @@ let dragDepth = 0;
 // A file being dragged out of the player (draggingOut, ui.js) is not offered for opening
 document.addEventListener('dragenter', e => {
   e.preventDefault();
-  if (draggingOut) return;
+  if (draggingOut || currentView === 'editor') return; // the editor takes its own drops
   dragDepth++;
   $('#drop').hidden = false;
 });
@@ -1586,7 +1586,7 @@ document.addEventListener('drop', async e => {
   e.preventDefault();
   dragDepth = 0;
   $('#drop').hidden = true;
-  if (draggingOut) return;
+  if (draggingOut || currentView === 'editor') return;
   const dropped = [...e.dataTransfer.files].map(f => api.pathForFile(f)).filter(Boolean);
   if (!dropped.length) return;
   const paths = await api.expandPaths(dropped);
@@ -1598,7 +1598,7 @@ api.onOpenPaths(paths => addFiles(paths));
 
 // keyboard (by physical key, so it works with the Russian layout too)
 document.addEventListener('keydown', e => {
-  if (document.querySelector('dialog[open]')) return;
+  if (document.querySelector('dialog[open]') || currentView === 'editor') return;
   const el = e.target;
   if (el.tagName === 'SELECT' || (el.tagName === 'INPUT' && el.type !== 'range')) return;
   const ctrl = e.ctrlKey || e.metaKey;

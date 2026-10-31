@@ -39,8 +39,8 @@ const FF_BASE = ['-hide_banner', '-y', '-nostats', '-progress', 'pipe:1'];
 // Lets the renderer switch between audio tracks of one file natively
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
 
-// Settings, track names and positions stay in the folder used before the rename
-app.setPath('userData', path.join(app.getPath('appData'), 'takao'));
+// The beta keeps its own settings, library and caches, so it never touches the main player's
+app.setPath('userData', path.join(app.getPath('appData'), 'takao-beta'));
 
 // Interface language. The page keeps the choice; it is mirrored here for native dialogs and
 // file names, and for Chromium's own words (picture-in-picture title) from the next start.
@@ -115,7 +115,7 @@ function createWindow() {
     minWidth: 820,
     minHeight: 520,
     backgroundColor: '#0c0d12',
-    title: 'Tako.player',
+    title: 'Tako.player Beta',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#0c0d12', symbolColor: '#9aa0b4', height: 40 },
@@ -1195,6 +1195,83 @@ ipcMain.handle('concat-clips', async (_e, o) => {
   args.push('-movflags', '+faststart', o.out);
   await run(FFMPEG, args, { jobId: o.jobId, duration: ranges.reduce((s, [a, b]) => s + b - a, 0) });
   return { out: o.out, parts: ranges.length };
+});
+
+// ---------- editor (beta): renders the whole timeline into one video
+//
+// Every clip is its own input, cut with an input seek. Video clips are fitted into the frame
+// with transparent bars and laid over a black canvas from the lowest track up, each shifted
+// to its place on the timeline; fades are fades of transparency. Audio clips are delayed to
+// their place and mixed. Titles are drawn last. The graph goes through a script file, so
+// paths and text need no shell quoting.
+
+// Paths inside a quoted filter option: forward slashes, and the drive colon escaped
+const ffPath = p => p.replace(/\\/g, '/').replace(/:/g, '\\:');
+const FONT = ffPath(path.join(process.env.SystemRoot || 'C:\\Windows', 'Fonts', 'arial.ttf'));
+const num = x => (Math.round(x * 1000) / 1000).toString();
+
+ipcMain.handle('editor-export', async (_e, o) => {
+  const { w, h, fps } = o;
+  const T = o.duration;
+  if (!(T > 0)) throw new Error(L('Таймлайн пуст', 'The timeline is empty'));
+  if ([...o.video, ...o.audio].some(c => path.resolve(c.file).toLowerCase() === path.resolve(o.out).toLowerCase())) {
+    throw new Error(L('Нельзя сохранить поверх исходного файла', 'Cannot save over a source file'));
+  }
+  const tmp = fs.mkdtempSync(path.join(app.getPath('temp'), 'tako-edit-'));
+  const args = [...FF_BASE];
+  const graph = [];
+  let input = 0;
+  graph.push(`color=c=black:s=${w}x${h}:r=${fps}:d=${num(T)},format=yuva420p[base0]`);
+  let base = 'base0';
+  o.video.forEach((c, k) => {
+    // a picture is one frame, repeated for as long as its clip lasts
+    if (c.image) args.push('-loop', '1', '-framerate', String(fps), '-t', num(c.dur), '-i', c.file);
+    else args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
+    let f = `[${input}:${c.vIndex}]setpts=PTS-STARTPTS,fps=${fps},scale=${w}:${h}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0`;
+    if (c.fadeIn > 0) f += `,fade=t=in:st=0:d=${num(c.fadeIn)}:alpha=1`;
+    if (c.fadeOut > 0) f += `,fade=t=out:st=${num(Math.max(0, c.dur - c.fadeOut))}:d=${num(c.fadeOut)}:alpha=1`;
+    graph.push(`${f},setpts=PTS+${num(c.start)}/TB[v${k}]`);
+    graph.push(`[${base}][v${k}]overlay=eof_action=pass:format=auto[base${k + 1}]`);
+    base = `base${k + 1}`;
+    input++;
+  });
+  o.texts.forEach((t, k) => {
+    const file = path.join(tmp, `t${k}.txt`);
+    fs.writeFileSync(file, t.text, 'utf8');
+    const s = t.start, e = t.start + t.dur;
+    const size = Math.round(t.size * h / 1080);
+    const y = t.pos === 'top' ? `h*0.08` : t.pos === 'center' ? `(h-text_h)/2` : `h-text_h-h*0.08`;
+    const fi = Math.max(0.001, t.fadeIn || 0), fo = Math.max(0.001, t.fadeOut || 0);
+    const alpha = `if(lt(t,${num(s + fi)}),(t-${num(s)})/${num(fi)},if(gt(t,${num(e - fo)}),(${num(e)}-t)/${num(fo)},1))`;
+    let f = `[${base}]drawtext=fontfile='${FONT}':textfile='${ffPath(file)}':fontsize=${size}:fontcolor=${t.color}:x=(w-text_w)/2:y=${y}:line_spacing=${Math.round(size * 0.2)}:enable='between(t,${num(s)},${num(e)})':alpha='${alpha}'`;
+    if (t.box) f += `:box=1:boxcolor=black@0.55:boxborderw=${Math.round(size * 0.35)}`;
+    graph.push(`${f}[txt${k}]`);
+    base = `txt${k}`;
+  });
+  graph.push(`[${base}]format=yuv420p[vout]`);
+  const fmtA = 'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo';
+  const mixed = o.audio.map((c, k) => {
+    args.push('-ss', num(c.in), '-t', num(c.dur), '-i', c.file);
+    let f = `[${input}:${c.aIndex}]${fmtA},asetpts=PTS-STARTPTS,volume=${num(c.volume)}`;
+    if (c.fadeIn > 0) f += `,afade=t=in:st=0:d=${num(c.fadeIn)}`;
+    if (c.fadeOut > 0) f += `,afade=t=out:st=${num(Math.max(0, c.dur - c.fadeOut))}:d=${num(c.fadeOut)}`;
+    graph.push(`${f},adelay=${Math.round(c.start * 1000)}:all=1[a${k}]`);
+    input++;
+    return `[a${k}]`;
+  });
+  if (mixed.length) graph.push(`${mixed.join('')}amix=inputs=${mixed.length}:normalize=0:duration=longest,apad[aout]`);
+  else graph.push(`anullsrc=r=48000:cl=stereo[aout]`);
+  const script = path.join(tmp, 'graph.txt');
+  fs.writeFileSync(script, graph.join(';\n'), 'utf8');
+  args.push('-filter_complex_script', script, '-map', '[vout]', '-map', '[aout]', '-t', num(T),
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(o.crf || 20), '-pix_fmt', 'yuv420p', '-r', String(fps),
+    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out);
+  try {
+    await run(FFMPEG, args, { jobId: o.jobId, duration: T });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  return { out: o.out };
 });
 
 // Streams one audio track from `start` as fragmented AAC for Media Source Extensions,

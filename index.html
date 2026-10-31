@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob:; img-src 'self' file: data:; style-src 'self' file: 'unsafe-inline'">
-<title>Tako.player</title>
+<title>Tako.player Beta</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="editor.css">
 </head>
 <body data-view="player">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -58,6 +59,9 @@
     <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.5"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
   </defs>
 </svg>
 
@@ -73,6 +77,7 @@
     <div class="rail-indicator"></div>
     <button id="nav-player" class="rail-btn active" data-tip="Плеер"><svg class="i"><use href="#i-screen"/></svg></button>
     <button id="nav-library" class="rail-btn" data-tip="Библиотека (Ctrl+L)"><svg class="i"><use href="#i-grid"/></svg></button>
+    <button id="nav-editor" class="rail-btn" data-tip="Редактор (бета)"><svg class="i"><use href="#i-film"/></svg><span class="beta-dot">β</span></button>
     <span class="rail-sep"></span>
     <button id="btn-open" class="rail-btn" data-tip="Открыть файлы (Ctrl+O)"><svg class="i"><use href="#i-file-plus"/></svg></button>
     <span class="rail-spacer"></span>
@@ -277,6 +282,87 @@
         <div class="mini-bar"><div id="mini-fill"></div></div>
         <button id="mini-open" class="btn small">Открыть плеер</button>
         <button id="mini-close" class="icon sm" title="Закрыть и поставить на паузу"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+    </section>
+
+    <section id="view-editor" class="view">
+      <div class="ed">
+        <div class="ed-top">
+          <aside class="ed-bin">
+            <div class="ed-head">
+              <span>Медиа</span>
+              <button id="ed-import" class="btn small accent"><svg class="i"><use href="#i-plus"/></svg>Добавить</button>
+            </div>
+            <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
+          </aside>
+          <div class="ed-preview">
+            <div id="ed-screen-wrap">
+              <div id="ed-screen">
+                <video id="ed-v1" muted playsinline></video>
+                <video id="ed-v2" muted playsinline></video>
+                <div id="ed-titles"></div>
+              </div>
+            </div>
+            <div class="ed-transport">
+              <button id="ed-home" class="icon sm" title="В начало (Home)"><svg class="i"><use href="#i-prev"/></svg></button>
+              <button id="ed-play" class="play" title="Воспроизвести / пауза (Пробел)"><svg class="i"><use id="ed-play-icon" href="#i-play"/></svg></button>
+              <button id="ed-end" class="icon sm" title="В конец (End)"><svg class="i"><use href="#i-next"/></svg></button>
+              <span id="ed-time">0:00.00 / 0:00.00</span>
+            </div>
+          </div>
+          <aside class="ed-insp">
+            <div class="ed-head"><span>Свойства</span></div>
+            <div id="ed-insp-body"></div>
+          </aside>
+        </div>
+        <div class="ed-toolbar">
+          <div class="seg-tools">
+            <button data-edtool="select" class="icon sm on" title="Выбор и перемещение (V)"><svg class="i"><use href="#i-move"/></svg></button>
+            <button data-edtool="razor" class="icon sm" title="Бритва — нажмите на клип, чтобы разрезать (C)"><svg class="i"><use href="#i-scissors"/></svg></button>
+          </div>
+          <button id="ed-split" class="btn small" title="Разрезать по линии времени (S)">Разрезать</button>
+          <button id="ed-del" class="btn small" title="Удалить выбранное (Delete)">Удалить</button>
+          <button id="ed-text" class="btn small" title="Добавить надпись (T)"><svg class="i"><use href="#i-type"/></svg>Текст</button>
+          <button id="ed-undo" class="icon sm" title="Отменить (Ctrl+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
+          <button id="ed-redo" class="icon sm flip" title="Повторить (Ctrl+Shift+Z)"><svg class="i"><use href="#i-undo"/></svg></button>
+          <label class="ed-check" title="Клипы прилипают к краям других клипов и к линии времени"><input type="checkbox" id="ed-snap" checked>Привязка</label>
+          <span class="ed-flex"></span>
+          <label class="ed-zoom" title="Масштаб таймлайна (Ctrl + колесо)">Масштаб<input type="range" id="ed-zoom" min="0" max="100" value="40"></label>
+          <select id="ed-res" class="chip" title="Размер кадра готового ролика">
+            <option value="1920x1080">1920×1080</option>
+            <option value="1280x720">1280×720</option>
+            <option value="2560x1440">2560×1440</option>
+            <option value="3840x2160">3840×2160</option>
+            <option value="1080x1920">1080×1920 (вертикальный)</option>
+            <option value="1080x1080">1080×1080 (квадрат)</option>
+          </select>
+          <select id="ed-fps" class="chip" title="Кадров в секунду">
+            <option value="30">30 к/с</option>
+            <option value="60">60 к/с</option>
+            <option value="25">25 к/с</option>
+          </select>
+          <button id="ed-new" class="btn small ghost" title="Начать новый проект">Новый</button>
+          <button id="ed-export" class="btn small accent"><svg class="i"><use href="#i-scissors"/></svg>Экспорт…</button>
+        </div>
+        <div class="ed-timeline">
+          <div id="ed-heads"></div>
+          <div id="ed-scroll">
+            <div id="ed-canvas">
+              <div id="ed-ruler"></div>
+              <div id="ed-lanes"></div>
+              <div id="ed-playhead"><i></i></div>
+              <div id="ed-snapline" hidden></div>
+            </div>
+          </div>
+        </div>
+        <div id="ed-progress" hidden>
+          <div class="busy-box">
+            <div class="spinner"></div>
+            <div id="ed-progress-text">Экспорт…</div>
+            <div class="progress"><div id="ed-progress-bar"></div></div>
+            <button id="ed-progress-cancel" class="btn small">Отмена</button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -556,5 +642,6 @@
 <script src="renderer.js"></script>
 <script src="changelog.js"></script>
 <script src="ui.js"></script>
+<script src="editor.js"></script>
 </body>
 </html>

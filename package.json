@@ -44,6 +44,8 @@
       "ui.js",
       "i18n.js",
       "changelog.js",
+      "editor.js",
+      "editor.css",
       "index.html",
       "styles.css",
       "assets/**",

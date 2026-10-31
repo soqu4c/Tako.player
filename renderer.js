@@ -1214,6 +1214,34 @@ function checkbox(label, value, checked) {
   return l;
 }
 
+// An audio track in the export dialog: a checkbox, and a loudness slider used when mixing
+function audioRow(s, k) {
+  const row = document.createElement('div');
+  row.className = 'ex-track';
+  const box = checkbox('Аудио ' + streamLabel(s, k), s.index, k === state.audioK);
+  const vol = document.createElement('span');
+  vol.className = 'ex-vol';
+  vol.title = 'Громкость дорожки в смеси';
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = 0;
+  range.max = 2;
+  range.step = 0.05;
+  range.value = 1;
+  range.dataset.index = s.index;
+  const val = document.createElement('b');
+  const show = () => {
+    val.textContent = Math.round(range.value * 100) + '%';
+    range.style.setProperty('--fill', range.value / 2 * 100 + '%');
+  };
+  range.oninput = show;
+  range.ondblclick = () => { range.value = 1; show(); };
+  show();
+  vol.append(range, val);
+  row.append(box, vol);
+  return row;
+}
+
 function openExport() {
   if (!state.info || state.exportJob) return;
   video.pause();
@@ -1231,7 +1259,7 @@ function openExport() {
 
   const audio = $('#ex-audio');
   audio.innerHTML = '';
-  state.audioStreams.forEach((s, k) => audio.append(checkbox('Аудио ' + streamLabel(s, k), s.index, k === state.audioK)));
+  state.audioStreams.forEach((s, k) => audio.append(audioRow(s, k)));
   const subs = $('#ex-subs');
   subs.innerHTML = '';
   state.subStreams.forEach((s, k) => subs.append(checkbox('Субтитры ' + streamLabel(s, k), s.index, false)));
@@ -1262,6 +1290,10 @@ function updateExportForm() {
   const audioChecked = $('#ex-audio').querySelectorAll('input:checked').length;
   $('#ex-mix-row').hidden = audioChecked < 2;
   const mix = audioChecked > 1 && $('#ex-mix').checked;
+  // Loudness sliders matter only for tracks going into the mix
+  for (const row of $('#ex-audio').children) {
+    row.querySelector('.ex-vol').hidden = !mix || !row.querySelector('input[type=checkbox]').checked;
+  }
   updateBitrateForm({ format, audioOnly, encode, mix, audioTracks: mix || audioOnly ? Math.min(1, audioChecked) : audioChecked });
   const notes = [];
   if (audioOnly && !mix) notes.push('В аудиофайл попадёт только первая отмеченная аудиодорожка.');
@@ -1349,6 +1381,7 @@ async function doExport() {
   const abitrate = $('#ex-abr-row').hidden ? 0 : Number($('#ex-abr').value) || 0;
   const quality = $('#ex-quality').value;
   const mix = audio.length > 1 && $('#ex-mix').checked;
+  const volumes = Object.fromEntries([...document.querySelectorAll('#ex-audio .ex-vol input')].map(r => [r.dataset.index, Number(r.value)]));
   // Title of the mixed track: the short names of its parts, e.g. "Дубляж + Оригинал"
   const mixTitle = mix ? audio.map(i => {
     const k = state.audioStreams.findIndex(s => s.index === i);
@@ -1382,6 +1415,7 @@ async function doExport() {
       subs,
       mix,
       mixTitle,
+      volumes,
       titles: Object.fromEntries([...state.audioStreams.map((s, k) => [s.index, trackName(s, k)]), ...Object.entries(state.names)].filter(([, v]) => v)),
     });
     exDlg.close();

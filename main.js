@@ -386,11 +386,16 @@ async function subtitleFile(file) {
 
 // Mixes audio streams into one labelled [mix]. Tracks with different channel layouts
 // are brought to stereo first; the limiter keeps the sum from clipping.
-function mixFilter(info, indexes) {
+// `volumes` maps a stream index to its loudness in the mix (1 = as recorded)
+function mixFilter(info, indexes, volumes = {}) {
   const srcs = indexes.map(i => info.streams.find(s => s.index === i));
   const same = srcs.every(s => s && s.channel_layout && s.channel_layout === srcs[0].channel_layout);
   const format = `aformat=sample_fmts=fltp:sample_rates=48000${same ? '' : ':channel_layouts=stereo'}`;
-  const inputs = indexes.map((i, j) => `[0:${i}]${format}[a${j}]`).join(';');
+  const gain = i => {
+    const v = Number(volumes[i]);
+    return Number.isFinite(v) && v >= 0 && v !== 1 ? `,volume=${v.toFixed(2)}` : '';
+  };
+  const inputs = indexes.map((i, j) => `[0:${i}]${format}${gain(i)}[a${j}]`).join(';');
   const labels = indexes.map((_, j) => `[a${j}]`).join('');
   return `${inputs};${labels}amix=inputs=${indexes.length}:duration=longest:normalize=0,alimiter=limit=0.95:level=0[mix]`;
 }
@@ -717,7 +722,7 @@ ipcMain.handle('export', async (_e, o) => {
   const mix = !!o.mix && o.audio.length > 1;
   const audio = mix ? [] : audioOnly ? o.audio.slice(0, 1) : o.audio;
   const subs = o.format === 'mkv' ? o.subs : [];
-  if (mix) args.push('-filter_complex', mixFilter(info, o.audio));
+  if (mix) args.push('-filter_complex', mixFilter(info, o.audio, o.volumes));
   // Output streams in order: video, audio (or the mix), subtitles
   const outputs = [
     ...(!audioOnly && o.video && v ? [v.index] : []).map(i => ({ map: `0:${i}`, title: o.titles && o.titles[i] })),

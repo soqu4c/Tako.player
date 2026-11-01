@@ -153,6 +153,8 @@ app.on('second-instance', (_e, argv) => {
 
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
+  // encrypted DNS when it can be had: names a provider hides (YouTube's video servers) still open
+  app.configureHostResolver({ secureDnsMode: 'automatic', secureDnsServers: ['https://cloudflare-dns.com/dns-query', 'https://dns.google/dns-query'] });
   // hls.js reads stream playlists and pieces with XHR; many sites send them without a CORS
   // header, which the page needs to read anything from another site
   session.defaultSession.webRequest.onHeadersReceived({ urls: ['https://*/*'] }, (d, cb) => {
@@ -867,8 +869,110 @@ async function ytdlpEnsure(jobId) {
   return exe;
 }
 
-// Runs yt-dlp; onLine gets each line of its output as it comes
-function ytdlp(exe, args, jobId, onLine) {
+// YouTube hands out its videos only after a JavaScript puzzle, which yt-dlp solves with a
+// JavaScript engine. The Node.js inside Electron is too old for it, so Deno (the one yt-dlp
+// recommends) is fetched once, about 43 MB, the first time a YouTube link is opened.
+const DENO_ZIP = 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip';
+const denoExe = () => path.join(path.dirname(ytdlpExe()), 'deno.exe');
+const isYouTube = url => /(^|\.)(youtube\.com|youtu\.be)\//i.test(url.replace(/^https?:\/\/(www\.|m\.)?/i, '.'));
+
+let denoPending = null; // a second link while Deno is coming waits for the same download
+function denoEnsure(jobId) {
+  const exe = denoExe();
+  const zip = exe.replace(/\.exe$/, '.zip');
+  if (fs.existsSync(exe)) {
+    fs.rmSync(zip, { force: true }); // left by an unpacking that was cut short
+    return Promise.resolve(exe);
+  }
+  denoPending = denoPending || (async () => {
+    const sum = /Hash\s*:\s*([0-9a-f]{64})/i.exec(await getText(DENO_ZIP + '.sha256sum'));
+    if (!sum) throw new Error(L('не нашёл контрольную сумму Deno', 'Deno checksum not found'));
+    await download(DENO_ZIP, zip, sum[1].toLowerCase(), jobId, 'deno', linkProgress);
+    await run(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', path.dirname(exe)]);
+    fs.rmSync(zip, { force: true });
+    if (!fs.existsSync(exe)) throw new Error(L('Deno не распаковался', 'Deno did not unpack'));
+    return exe;
+  })().finally(() => { denoPending = null; });
+  return denoPending;
+}
+
+// Some providers answer "no such site" for blocked names (YouTube) even when another DNS server
+// is asked, though the site itself opens. Names are then looked up through encrypted DNS (DoH):
+// the page through Chromium's own resolver, yt-dlp through a small local proxy that does it.
+
+const DOH = ['https://1.1.1.1/dns-query', 'https://8.8.8.8/resolve'];
+const dohCache = new Map(); // host -> { ip, until }
+
+function dohLookup(host) {
+  const hit = dohCache.get(host);
+  if (hit && hit.until > Date.now()) return Promise.resolve(hit.ip);
+  const ask = base => new Promise((resolve, reject) => {
+    const req = https.get(`${base}?name=${encodeURIComponent(host)}&type=A`, { headers: { accept: 'application/dns-json' }, timeout: 5000 }, res => {
+      let s = '';
+      res.setEncoding('utf8');
+      res.on('data', d => { s += d; });
+      res.on('end', () => {
+        try {
+          const a = (JSON.parse(s).Answer || []).find(x => x.type === 1);
+          if (!a) return reject(new Error('no address'));
+          dohCache.set(host, { ip: a.data, until: Date.now() + Math.max(60, a.TTL || 300) * 1000 });
+          resolve(a.data);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
+  return ask(DOH[0]).catch(() => ask(DOH[1]));
+}
+
+// The ordinary lookup first; DoH when it fails or gives nothing
+function lookupHost(host) {
+  if (net.isIP(host)) return Promise.resolve(host);
+  return new Promise(resolve => require('dns').lookup(host, { family: 4 }, (err, ip) => resolve(err ? null : ip)))
+    .then(ip => ip || dohLookup(host));
+}
+
+let dohProxyPort = 0;
+function startDohProxy() {
+  if (dohProxyPort) return Promise.resolve(dohProxyPort);
+  return new Promise((resolve, reject) => {
+    const server = require('http').createServer((req, res) => {
+      res.writeHead(501);
+      res.end();
+    });
+    // yt-dlp asks for a tunnel to host:port; the address is found here, the bytes just go through
+    server.on('connect', (req, client, head) => {
+      const [host, port] = req.url.split(':');
+      client.on('error', () => {});
+      lookupHost(host).then(ip => {
+        const up = net.connect(Number(port) || 443, ip, () => {
+          client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+          if (head && head.length) up.write(head);
+          up.pipe(client);
+          client.pipe(up);
+        });
+        up.on('error', () => client.destroy());
+      }).catch(() => {
+        client.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      });
+    });
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      dohProxyPort = server.address().port;
+      server.unref();
+      resolve(dohProxyPort);
+    });
+  });
+}
+
+// Runs yt-dlp (through the DoH proxy); onLine gets each line of its output as it comes
+async function ytdlp(exe, args, jobId, onLine) {
+  const port = await startDohProxy().catch(() => 0);
+  if (port) args = ['--proxy', `http://127.0.0.1:${port}`, ...args];
+  if (fs.existsSync(denoExe())) args = ['--js-runtimes', `deno:${denoExe()}`, ...args];
   return new Promise((resolve, reject) => {
     const proc = spawn(exe, args, { windowsHide: true });
     // with the ffmpeg it starts: killing only yt-dlp would leave that one running
@@ -908,6 +1012,7 @@ const PLAY_FORMAT = 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]/bes
 
 ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
   const exe = await ytdlpEnsure(jobId);
+  if (isYouTube(url)) await denoEnsure(jobId);
   linkProgress(jobId, 1, 'resolve');
   const j = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', PLAY_FORMAT, url], jobId));
   const hls = /m3u8/.test(j.protocol || '') || /\.m3u8/.test(j.url || '');

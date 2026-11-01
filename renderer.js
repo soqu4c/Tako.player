@@ -485,6 +485,8 @@ function linkOnlyFile() {
   return true;
 }
 const LINK_RE = /^https?:\/\/\S+$/i;
+// "kick.com/name" or "www.twitch.tv/name" as typed: the https:// is added
+const asLink = s => (/^https?:\/\//i.test(s) ? s : /^(www\.)?([\w-]+\.)+[a-z]{2,}\/\S*$/i.test(s) ? 'https://' + s : s);
 
 function openLinks(urls) {
   state.playlist = urls.map(u => ({ path: u, link: true, name: u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80) }));
@@ -543,8 +545,8 @@ async function loadLink(item, token, startAt) {
 
 api.onLinkProgress(({ jobId, value, stage }) => {
   if (jobId !== state.busyJob) return;
-  if (stage === 'tool') {
-    $('#busy-text').textContent = `Первый раз: скачиваю yt-dlp… ${Math.round(value * 100)}%`;
+  if (stage === 'tool' || stage === 'deno') {
+    $('#busy-text').textContent = stage === 'tool' ? `Первый раз: скачиваю yt-dlp… ${Math.round(value * 100)}%` : `Первый раз для YouTube: скачиваю Deno… ${Math.round(value * 100)}%`;
     $('#busy-bar').style.width = value * 100 + '%';
   } else if (stage === 'resolve') $('#busy-text').textContent = 'Открываю ссылку…';
 });

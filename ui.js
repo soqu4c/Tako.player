@@ -98,7 +98,7 @@ const reportBug = where => api.reportBug({ errors: recentErrors, where });
 
 // ---------- opening a link to watch in the player
 
-const linkUrls = () => $('#link-url').value.split(/\s+/).filter(u => LINK_RE.test(u));
+const linkUrls = () => $('#link-url').value.split(/\s+/).map(asLink).filter(u => LINK_RE.test(u));
 function openLinkDialog(url = '') {
   $('#link-url').value = url;
   $('#link-dlg').showModal();
@@ -107,7 +107,7 @@ function openLinkDialog(url = '') {
 $('#link-watch').onclick = () => {
   const urls = linkUrls();
   if (!urls.length) {
-    toast('Вставьте ссылку, которая начинается с https://');
+    toast('Вставьте ссылку на видео или канал, например twitch.tv/канал');
     return;
   }
   $('#link-dlg').close();
@@ -124,7 +124,7 @@ $('#btn-open-link-big').onclick = () => openLinkDialog();
 document.addEventListener('paste', e => {
   if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
   if (document.querySelector('dialog[open]')) return;
-  const urls = (e.clipboardData.getData('text') || '').trim().split(/\s+/).filter(u => LINK_RE.test(u));
+  const urls = (e.clipboardData.getData('text') || '').trim().split(/\s+/).map(asLink).filter(u => LINK_RE.test(u));
   if (!urls.length) return;
   e.preventDefault();
   if (currentView === 'editor') return; // the editor keeps Ctrl+V for its clips

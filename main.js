@@ -831,12 +831,13 @@ const ytdlpExe = () => path.join(path.dirname(defaultModelsDir()), 'tools', 'yt-
 let ytdlpChecked = 0;
 const linkProgress = (jobId, value, stage) => { if (win) win.webContents.send('link-progress', { jobId, value, stage }); };
 
-function getText(url, hops = 0) {
+// ua: some sites (Kick) answer only to a browser's name
+function getText(url, hops = 0, ua = `Tako.player/${app.getVersion()}`) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` }, lookup: dohAwareLookup }, res => {
+    https.get(url, { headers: { 'User-Agent': ua, Accept: 'application/json, */*' }, lookup: dohAwareLookup }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
         res.resume();
-        return resolve(getText(new URL(res.headers.location, url).toString(), hops + 1));
+        return resolve(getText(new URL(res.headers.location, url).toString(), hops + 1, ua));
       }
       if (res.statusCode !== 200) {
         res.resume();
@@ -1125,16 +1126,32 @@ async function hlsPart(f, dir, from, to, jobId) {
   }
 }
 
-// The recording of a Twitch stream that is still going on: the channel's newest recording, if it
-// is marked live or began with this stream. Channels that hide recordings until the end (or keep
-// them for subscribers) have none, and the stream is then only watched live.
+// The recording of a stream that is still going on, so it can be watched from the start.
+// Twitch: the channel's newest recording, if it is marked live or began with this stream.
+// Kick: its list of videos has the stream itself in it, marked live, with the recording's
+// address. Channels that hide recordings until the end have none: then only live.
 // The Twitch channel a link points at ("twitch.tv/name"), not a recording or a clip
 const twitchChannel = url => {
   const m = /twitch\.tv\/(\w+)\/?(?:[?#]|$)/i.exec(url || '');
   return m && !['videos', 'directory', 'clip'].includes(m[1].toLowerCase()) ? m[1] : null;
 };
+const kickChannel = url => {
+  const m = /kick\.com\/([\w-]+)\/?(?:[?#]|$)/i.exec(url || '');
+  return m && !['video', 'videos', 'categories', 'browse'].includes(m[1].toLowerCase()) ? m[1] : null;
+};
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+
+async function kickArchive(slug) {
+  const ask = () => getText(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}/videos`, 0, BROWSER_UA);
+  const j = JSON.parse(await ask().catch(() => ask()).catch(() => 'null'));
+  const list = Array.isArray(j) ? j : (j && j.data) || [];
+  const v = list.find(x => x.is_live && x.source);
+  return v ? { url: v.source, duration: 0, page: v.video && v.video.uuid ? `https://kick.com/${slug}/videos/${v.video.uuid}` : null } : null;
+}
 
 async function findArchive(page, started) {
+  const kick = kickChannel(page);
+  if (kick) return kickArchive(kick);
   const name = twitchChannel(page);
   if (!name) return null;
   const exe = await ytdlpEnsure();
@@ -1158,12 +1175,14 @@ const LIVE_TAIL = 5 * 60;
 ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {
   const exe = await ytdlpEnsure(jobId);
   if (isYouTube(url)) await denoEnsure(jobId);
-  if (twitchChannel(url)) {
+  if (twitchChannel(url) || kickChannel(url)) {
     const live = JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', '-f', PLAY_FORMAT, url], jobId));
     if (live.is_live) {
       const a = await findArchive(url, live.timestamp);
-      if (!a) throw new Error(L('У этого эфира нет записи (стример её скрывает) — скачать кусок можно будет после конца стрима', 'This stream has no recording (the streamer hides it) — a part can be downloaded after the stream ends'));
+      if (!a || !a.page) throw new Error(L('У этого эфира нет записи (стример её скрывает) — скачать кусок можно будет после конца стрима', 'This stream has no recording (the streamer hides it) — a part can be downloaded after the stream ends'));
       url = a.page;
+      // Kick does not say how long its recording is yet; yt-dlp reads it from the recording
+      if (!a.duration) a.duration = (JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', url], jobId).catch(() => 'null')) || {}).duration || 0;
       if (from == null && to == null) {
         from = Math.max(0, a.duration - LIVE_TAIL);
         to = a.duration;

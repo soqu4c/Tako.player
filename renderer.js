@@ -572,7 +572,7 @@ async function loadLink(item, token, startAt) {
   setSource(r.url, startAt, true);
   if (r.live) osd(`Прямой эфир${r.site ? ' · ' + r.site : ''}`);
   // in the background: is the stream being recorded? then all of it can be watched from the start
-  if (r.live && /twitch/i.test(r.site)) {
+  if (r.live && /twitch|kick/i.test(r.site)) {
     api.linkArchive({ page: r.page, started: r.started }).then(a => {
       if (token !== state.token || !a) return;
       r.archive = a;

@@ -1380,3 +1380,18 @@ body.halloween .empty-glow { background: radial-gradient(closest-side, rgba(255,
 body.no-motion .hw-bat { animation: none; left: 20%; }
 body.no-motion .hw-bat.b2 { left: 70%; } body.no-motion .hw-bat.b3 { left: 85%; } body.no-motion .hw-bat.b4 { left: 40%; } body.no-motion .hw-bat.b5 { left: 60%; } body.no-motion .hw-bat.b6 { left: 8%; }
 body.halloween #empty > :not(.hw-bats):not(.hw-web):not(.empty-glow) { z-index: 1; }
+
+/* ---------- a new version: a small notice at the top in the middle */
+#upd-note { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 14px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--line-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45); font-size: 13px; color: var(--text); white-space: nowrap; }
+#upd-note[hidden] { display: none; }
+#upd-note.in { animation: upd-in .35s var(--ease); }
+@keyframes upd-in { from { opacity: 0; transform: translate(-50%, -14px); } }
+#upd-note > .i { width: 16px; height: 16px; color: var(--accent); }
+#upd-bar { width: 90px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+#upd-bar[hidden] { display: none; }
+#upd-bar i { display: block; height: 100%; background: var(--grad); transition: width .3s; }
+#upd-note .btn.small { padding: 5px 14px; }
+#upd-close { color: var(--muted); }
+body.no-motion #upd-note.in { animation: none; }

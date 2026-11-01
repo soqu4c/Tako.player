@@ -68,6 +68,14 @@
   <span id="title-file"></span>
   <button id="update-btn" class="update-pill" title="Новая версия скачана — плеер перезапустится уже обновлённым" hidden><svg class="i"><use href="#i-refresh"/></svg><span>Обновить</span></button>
 </header>
+<!-- a new version: a small notice at the top in the middle, as in Yandex Music -->
+<div id="upd-note" hidden>
+  <svg class="i"><use href="#i-refresh"/></svg>
+  <span id="upd-text"></span>
+  <div id="upd-bar"><i></i></div>
+  <button id="upd-go" class="btn small accent">Обновить</button>
+  <button id="upd-close" class="icon sm" title="Скрыть — обновление установится, когда закроете плеер">✕</button>
+</div>
 
 <div id="app">
   <nav id="rail">

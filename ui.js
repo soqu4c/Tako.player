@@ -96,6 +96,55 @@ window.addEventListener('error', e => noteError(e.message + (e.filename ? ` (${e
 window.addEventListener('unhandledrejection', e => noteError(String((e.reason && (e.reason.stack || e.reason.message)) || e.reason).split('\n').slice(0, 3).join(' | ')));
 const reportBug = where => api.reportBug({ errors: recentErrors, where });
 
+// ---------- opening a link: watched in the player, or downloaded into the editor's project
+
+const linkUrls = () => $('#link-url').value.split(/\s+/).filter(u => LINK_RE.test(u));
+function openLinkDialog(url = '') {
+  const inEditor = currentView === 'editor';
+  $('#link-url').value = url;
+  $('#link-part').hidden = !inEditor;
+  $('#link-download').hidden = !inEditor;
+  // in the editor the point is to download; in the player, to watch
+  $('#link-download').classList.toggle('accent', inEditor);
+  $('#link-watch').classList.toggle('accent', !inEditor);
+  $('#link-dir-text').textContent = recall('edLinkDir', null) || 'папку выберете при скачивании';
+  $('#link-dlg').showModal();
+  $('#link-url').focus();
+}
+$('#link-watch').onclick = () => {
+  const urls = linkUrls();
+  if (!urls.length) {
+    toast('Вставьте ссылку, которая начинается с https://');
+    return;
+  }
+  $('#link-dlg').close();
+  if (currentView !== 'player') showView('player');
+  openLinks(urls);
+};
+$('#link-url').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  ($('#link-download').hidden ? $('#link-watch') : $('#link-download')).click();
+});
+$('#link-dir').onclick = async () => {
+  const dir = await api.linkPickDir();
+  if (!dir) return;
+  store('edLinkDir', dir);
+  $('#link-dir-text').textContent = dir;
+};
+$('#btn-open-link-big').onclick = () => openLinkDialog();
+// A link pasted anywhere in the player (not into a text field) opens right away
+document.addEventListener('paste', e => {
+  if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
+  if (document.querySelector('dialog[open]')) return;
+  const urls = (e.clipboardData.getData('text') || '').trim().split(/\s+/).filter(u => LINK_RE.test(u));
+  if (!urls.length) return;
+  e.preventDefault();
+  if (currentView === 'editor') return openLinkDialog(urls[0]);
+  if (currentView !== 'player') showView('player');
+  openLinks(urls);
+});
+
 const SETTING_TABS = [
   {
     id: 'play', title: 'Воспроизведение', icon: 'i-play', rows: [
@@ -440,6 +489,7 @@ function setTrimOpen(open) {
 }
 
 function toggleTrim() {
+  if (!trimOpen() && linkOnlyFile()) return;
   setTrimOpen(!trimOpen());
 }
 
@@ -462,6 +512,7 @@ function renderStrip() {
 }
 
 async function loadStrip() {
+  if (isLink()) return;
   const item = currentItem();
   if (!item || !state.info || !trimOpen()) return;
   const n = clamp(Math.round(strip.clientWidth / 92), 4, 24);
@@ -530,6 +581,7 @@ function drawWave() {
 }
 
 async function loadWave() {
+  if (isLink()) return;
   const item = currentItem();
   const s = state.audioStreams[state.audioK];
   if (!item || !s || !trimOpen()) return;
@@ -1741,6 +1793,7 @@ dText.addEventListener('keydown', e => {
 dText.addEventListener('blur', commitText);
 
 function openDraw() {
+  if (linkOnlyFile()) return;
   if (draw.on || !state.info || !state.videoStream || !video.videoWidth) return;
   video.pause();
   draw.on = true;
@@ -2042,6 +2095,7 @@ function renderMarkerList() {
 }
 
 function openMarkers() {
+  if (linkOnlyFile()) return;
   if (!state.info) return;
   video.pause();
   $('#mk-before').value = mk.before;
@@ -2191,6 +2245,7 @@ async function renderAsrModel() {
 }
 
 function openAsr() {
+  if (linkOnlyFile()) return;
   if (!state.info) return;
   if (!state.audioStreams.length) return toast('В этом файле нет звука');
   video.pause();

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob:; img-src 'self' file: data:; style-src 'self' file: 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: https:; connect-src 'self' file: https:; worker-src blob:; img-src 'self' file: data: https:; style-src 'self' file: 'unsafe-inline'">
 <title>Tako.player</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="editor.css">
@@ -111,6 +111,7 @@
             <div class="empty-actions">
               <button id="btn-open-big" class="btn accent"><svg class="i"><use href="#i-file-plus"/></svg>Открыть файлы</button>
               <button id="btn-open-folder-big" class="btn"><svg class="i"><use href="#i-folder"/></svg>Открыть папку</button>
+              <button id="btn-open-link-big" class="btn" title="YouTube, Twitch и другие сайты (Ctrl+U, или просто Ctrl+V)"><svg class="i"><use href="#i-link"/></svg>Ссылка</button>
               <button id="btn-go-library" class="btn ghost"><svg class="i"><use href="#i-grid"/></svg>Библиотека</button>
             </div>
             <button id="btn-news" class="news-link" hidden><svg class="i"><use href="#i-refresh"/></svg><span></span></button>
@@ -361,6 +362,7 @@
               <span class="on" data-bintab="bin">Проект</span>
               <span data-bintab="hist" title="Все изменения проекта: нажмите на шаг, чтобы вернуться к нему">История</span>
               <span class="ed-flex"></span>
+              <button id="ed-link" class="btn small" title="Скачать видео с YouTube, Twitch и других сайтов в проект (Ctrl+U)"><svg class="i"><use href="#i-link"/></svg>Ссылка</button>
               <button id="ed-import" class="btn small accent" title="Добавить файлы в проект (Ctrl+I)"><svg class="i"><use href="#i-plus"/></svg>Импорт</button>
             </div>
             <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
@@ -421,6 +423,20 @@
   </div>
 </div>
 
+<dialog id="link-dlg">
+  <h2>Видео по ссылке</h2>
+  <p class="hint">YouTube, Twitch, VK Видео, Kick, Rutube и сотни других сайтов — прямые эфиры и записи. Ссылку можно просто вставить в плеер через Ctrl+V.</p>
+  <input id="link-url" class="link-input" placeholder="https://www.twitch.tv/…" spellcheck="false">
+  <div id="link-part" class="link-part" hidden>
+    <label class="link-cut"><input type="checkbox" id="link-cut"> Только кусок: с <input id="link-from" class="time-input" placeholder="1:20:00"> по <input id="link-to" class="time-input" placeholder="1:25:00"></label>
+    <div class="link-dir">Сохранить в: <b id="link-dir-text">папку выберете при скачивании</b> <button id="link-dir" class="btn small ghost">Изменить…</button></div>
+  </div>
+  <div class="actions">
+    <button class="btn close-dlg">Отмена</button>
+    <button id="link-download" class="btn" hidden>Скачать в проект</button>
+    <button id="link-watch" class="btn accent">Смотреть</button>
+  </div>
+</dialog>
 <dialog id="export-dlg">
   <h2>Сохранить</h2>
   <div class="field">
@@ -744,6 +760,7 @@
     <tr><td><kbd>F</kbd>, двойной клик</td><td>Полный экран</td></tr>
     <tr><td><kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>Предыдущий / следующий файл в той же папке</td></tr>
     <tr><td><kbd>Ctrl+O</kbd></td><td>Открыть файлы</td></tr>
+    <tr><td><kbd>Ctrl+U</kbd>, <kbd>Ctrl+V</kbd></td><td>Видео по ссылке (YouTube, Twitch…)</td></tr>
     <tr><td><kbd>Ctrl+Shift+O</kbd></td><td>Открыть папку (вместе с вложенными)</td></tr>
     <tr><td><kbd>Ctrl+L</kbd></td><td>Библиотека / плеер</td></tr>
     <tr><td><kbd>Ctrl+E</kbd></td><td>Сохранить фрагмент</td></tr>
@@ -798,6 +815,7 @@
   </div>
 </div>
 
+<script src="vendor/hls.min.js"></script>
 <script src="i18n.js"></script>
 <script src="renderer.js"></script>
 <script src="changelog.js"></script>

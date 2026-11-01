@@ -46,6 +46,7 @@
       "changelog.js",
       "editor.js",
       "editor.css",
+      "vendor/**",
       "index.html",
       "styles.css",
       "assets/**",

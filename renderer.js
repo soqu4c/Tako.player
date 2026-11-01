@@ -295,6 +295,9 @@ async function loadIndex(i, startAt = 0) {
   renderPlaylist();
   const item = currentItem();
   hideBusy();
+  dropHls();
+  document.body.classList.remove('link');
+  if (item.link) return loadLink(item, token, startAt);
 
   let info;
   try {
@@ -357,8 +360,103 @@ function setSource(file, time, play) {
     if (play) video.play().catch(() => {});
   };
   video.addEventListener('loadedmetadata', pendingMeta);
-  video.src = api.toUrl(file);
+  dropHls();
+  const link = state.info && state.info.link;
+  if (/^https?:/.test(file) && (/m3u8/.test(file) || (link && link.hls && link.url === file)) && window.Hls && Hls.isSupported()) {
+    // a live stream or a site's HLS: hls.js feeds it to the video element
+    state.hls = new Hls({ lowLatencyMode: !!(state.info && state.info.link && state.info.link.live), backBufferLength: 90 });
+    state.hls.on(Hls.Events.ERROR, (_e, d) => {
+      if (!d.fatal) return;
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) state.hls.startLoad();
+      else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) state.hls.recoverMediaError();
+      else toast('Поток прервался: ' + (d.details || 'ошибка'));
+    });
+    state.hls.loadSource(file);
+    state.hls.attachMedia(video);
+  } else video.src = /^https?:/.test(file) ? file : api.toUrl(file);
 }
+
+function dropHls() {
+  if (!state.hls) return;
+  state.hls.destroy();
+  state.hls = null;
+}
+
+// ---------- links: YouTube, Twitch and other sites
+//
+// A link is found out by yt-dlp in the main process; the player gets one address to play.
+// What needs the file itself (trimming, saving, frames, speech) is not offered for links.
+
+const isLink = () => !!(state.info && state.info.link);
+function linkOnlyFile() {
+  if (!isLink()) return false;
+  toast('Для видео по ссылке это недоступно. Скачайте его: редактор → «Ссылка» → «Скачать в проект».');
+  return true;
+}
+const LINK_RE = /^https?:\/\/\S+$/i;
+
+function openLinks(urls) {
+  state.playlist = urls.map(u => ({ path: u, link: true, name: u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80) }));
+  state.playOn = urls.length > 1;
+  state.current = -1;
+  renderPlaylist();
+  loadIndex(0);
+}
+
+async function loadLink(item, token, startAt) {
+  const jobId = newJob();
+  showBusy('Открываю ссылку…', jobId);
+  let r;
+  try {
+    r = await api.linkResolve({ url: item.path, jobId });
+  } catch (e) {
+    if (token === state.token) {
+      hideBusy();
+      toast(`Не удалось открыть ссылку:\n${cleanErr(e)}`);
+    }
+    return;
+  }
+  if (token !== state.token) return;
+  hideBusy();
+  item.name = r.channel && !r.title.includes(r.channel) ? `${r.channel} — ${r.title}` : r.title;
+  state.info = { link: r, format: { duration: String(r.duration || 0) }, streams: [] };
+  state.videoStream = { codec_type: 'video', codec_name: 'h264', width: r.width, height: r.height };
+  state.audioStreams = [];
+  state.subStreams = [];
+  state.fps = 30;
+  state.audioK = 0;
+  state.embeddedK = 0;
+  state.pickDefault = false;
+  dropExt();
+  state.names = {};
+  disableSubs();
+  state.subTracks = new Map();
+  resetTrim();
+  fillTracks();
+  document.title = `${item.name} — Tako.player`;
+  $('#title-file').textContent = (r.live ? '🔴 ' : '') + item.name;
+  document.body.classList.add('loaded', 'link');
+  document.body.classList.remove('audio-only');
+  document.body.classList.toggle('link-live', r.live);
+  $('#audio-name').textContent = item.name;
+  renderPlaylist();
+  if (!startAt && !r.live) {
+    startAt = savedPosition(item.path, r.duration);
+    if (startAt) toast(`Продолжаю с ${fmt(startAt)}`, 'С начала', () => { video.currentTime = 0; });
+  }
+  state.level = 0;
+  state.baseLevel = 0;
+  setSource(r.url, startAt, true);
+  if (r.live) osd(`Прямой эфир${r.site ? ' · ' + r.site : ''}`);
+}
+
+api.onLinkProgress(({ jobId, value, stage }) => {
+  if (jobId !== state.busyJob) return;
+  if (stage === 'tool') {
+    $('#busy-text').textContent = `Первый раз: скачиваю yt-dlp… ${Math.round(value * 100)}%`;
+    $('#busy-bar').style.width = value * 100 + '%';
+  } else if (stage === 'resolve') $('#busy-text').textContent = 'Открываю ссылку…';
+});
 
 // Asks ffmpeg for a copy of the file Chromium can play (first audio track included) and switches to it
 async function buildPlayable(level, time, play) {
@@ -1111,6 +1209,8 @@ function updateProgress() {
   $('#strip-head').style.left = pct + '%';
   const f = state.precise ? fmtPrecise : fmt;
   $('#time').textContent = state.info ? `${f(t)} / ${fmt(d)}` : '0:00 / 0:00';
+  // a live stream has no length; the seek bar covers only the few seconds already buffered
+  if (state.info && state.info.link && state.info.link.live) $('#time').textContent = '● В эфире';
 }
 
 // ---------- trimming
@@ -1241,7 +1341,7 @@ bar.addEventListener('pointerdown', e => {
 // ---------- screenshot & info
 
 async function screenshot() {
-  if (!state.info || !state.videoStream) return;
+  if (!state.info || !state.videoStream || linkOnlyFile()) return;
   const wasPlaying = !video.paused;
   video.pause();
   try {
@@ -1346,7 +1446,7 @@ function audioRow(s, k) {
 }
 
 function openExport() {
-  if (!state.info || state.exportJob) return;
+  if (!state.info || state.exportJob || linkOnlyFile()) return;
   video.pause();
   const r = selRange();
   $('#ex-range-sel').disabled = !r;
@@ -1691,6 +1791,7 @@ document.addEventListener('keydown', e => {
   };
   const ctrlHandlers = {
     KeyO: () => (e.shiftKey ? openFolder() : openFiles()),
+    KeyU: () => openLinkDialog(),
     KeyE: openExport,
     KeyI: showInfo,
     KeyL: () => showView(currentView === 'library' ? 'player' : 'library'),

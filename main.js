@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage, screen, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -153,6 +153,13 @@ app.on('second-instance', (_e, argv) => {
 
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
+  // hls.js reads stream playlists and pieces with XHR; many sites send them without a CORS
+  // header, which the page needs to read anything from another site
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ['https://*/*'] }, (d, cb) => {
+    const h = d.responseHeaders || {};
+    if (d.resourceType === 'xhr' && !Object.keys(h).some(k => k.toLowerCase() === 'access-control-allow-origin')) h['Access-Control-Allow-Origin'] = ['*'];
+    cb({ responseHeaders: h });
+  });
   createWindow();
   setupUpdates(argPaths(process.argv));
 });
@@ -762,7 +769,7 @@ function asrProgress(jobId, value, stage) {
 }
 
 // GET with redirects into `dest`, hashing on the way; the file appears only once the sum matches
-function download(url, dest, sha256, jobId, stage) {
+function download(url, dest, sha256, jobId, stage, report = asrProgress) {
   return new Promise((resolve, reject) => {
     const part = dest + '.part';
     const job = { cancelled: false, kill: () => { job.req && job.req.destroy(); } };
@@ -792,7 +799,7 @@ function download(url, dest, sha256, jobId, stage) {
           got += d.length;
           if (total && Date.now() - last > 300) {
             last = Date.now();
-            asrProgress(jobId, got / total, stage);
+            report(jobId, got / total, stage);
           }
         });
         res.on('error', fail);
@@ -811,6 +818,218 @@ function download(url, dest, sha256, jobId, stage) {
     get(url, 0);
   });
 }
+
+// ---------- links: videos and live streams from YouTube, Twitch and other sites
+//
+// yt-dlp finds the video behind a page link. It is downloaded on first use next to the speech
+// models and asked to update itself once a day, since the sites keep changing.
+
+const YTDLP_BASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/';
+const ytdlpExe = () => path.join(path.dirname(defaultModelsDir()), 'tools', 'yt-dlp.exe');
+let ytdlpChecked = 0;
+const linkProgress = (jobId, value, stage) => { if (win) win.webContents.send('link-progress', { jobId, value, stage }); };
+
+function getText(url, hops = 0) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` } }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
+        res.resume();
+        return resolve(getText(new URL(res.headers.location, url).toString(), hops + 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(L(`сервер ответил ${res.statusCode}`, `the server answered ${res.statusCode}`)));
+      }
+      let s = '';
+      res.setEncoding('utf8');
+      res.on('data', d => { s += d; });
+      res.on('end', () => resolve(s));
+    }).on('error', e => reject(new Error(L('нет связи: ', 'no connection: ') + e.message)));
+  });
+}
+
+async function ytdlpEnsure(jobId) {
+  const exe = ytdlpExe();
+  if (fs.existsSync(exe)) {
+    if (Date.now() - ytdlpChecked > 24 * 3600e3) {
+      ytdlpChecked = Date.now();
+      // in the background; a new version is taken from the next link on
+      spawn(exe, ['-U'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
+    }
+    return exe;
+  }
+  fs.mkdirSync(path.dirname(exe), { recursive: true });
+  const sums = await getText(YTDLP_BASE + 'SHA2-256SUMS');
+  const m = /^([0-9a-f]{64})\s+yt-dlp\.exe$/m.exec(sums);
+  if (!m) throw new Error(L('не нашёл контрольную сумму yt-dlp', 'yt-dlp checksum not found'));
+  await download(YTDLP_BASE + 'yt-dlp.exe', exe, m[1], jobId, 'tool', linkProgress);
+  ytdlpChecked = Date.now();
+  return exe;
+}
+
+// Runs yt-dlp; onLine gets each line of its output as it comes
+function ytdlp(exe, args, jobId, onLine) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(exe, args, { windowsHide: true });
+    // with the ffmpeg it starts: killing only yt-dlp would leave that one running
+    const job = { cancelled: false, kill: () => spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on('error', () => proc.kill()) };
+    if (jobId) jobs.set(jobId, job);
+    let out = '';
+    let err = '';
+    let buf = '';
+    proc.stdout.on('data', d => {
+      out += d;
+      if (!onLine) return;
+      buf += d;
+      const lines = buf.split(/\r?\n|\r/);
+      buf = lines.pop();
+      lines.forEach(onLine);
+    });
+    proc.stderr.on('data', d => {
+      err = (err + d).slice(-6000);
+      if (onLine) String(d).split(/\r?\n|\r/).forEach(onLine);
+    });
+    proc.on('error', e => reject(e));
+    proc.on('close', code => {
+      if (jobId) jobs.delete(jobId);
+      if (buf && onLine) onLine(buf);
+      if (job.cancelled) return reject(new Error(L('Отменено', 'Cancelled')));
+      if (code === 0) return resolve(out);
+      // its own words are the clearest: "ERROR: [twitch:stream] ... The channel is not currently live"
+      const line = err.split(/\r?\n/).reverse().find(l => /ERROR/.test(l)) || err.trim().split(/\r?\n/).pop() || `yt-dlp ${code}`;
+      reject(new Error(line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/, '')));
+    });
+  });
+}
+
+// For watching: one address the page can open by itself. Streams and most sites give HLS
+// (played through hls.js); otherwise a single file with picture and sound together.
+const PLAY_FORMAT = 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]/best[vcodec!=none][acodec!=none][ext=mp4]/best[vcodec!=none][acodec!=none]/best';
+
+ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
+  const exe = await ytdlpEnsure(jobId);
+  linkProgress(jobId, 1, 'resolve');
+  const j = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', PLAY_FORMAT, url], jobId));
+  return {
+    title: j.title || j.fulltitle || url,
+    channel: j.uploader || j.channel || '',
+    site: j.extractor_key || '',
+    live: !!j.is_live,
+    duration: j.is_live ? 0 : j.duration || 0,
+    url: j.url,
+    hls: /m3u8/.test(j.protocol || '') || /\.m3u8/.test(j.url || ''),
+    width: j.width || 0,
+    height: j.height || 0,
+    page: j.webpage_url || url,
+  };
+});
+
+// A file from the web into dest (redirects followed); stops when the job is cancelled
+function fetchFile(url, dest, job, hops = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` } }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
+        res.resume();
+        return resolve(fetchFile(new URL(res.headers.location, url).toString(), dest, job, hops + 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(L(`сервер ответил ${res.statusCode}`, `the server answered ${res.statusCode}`)));
+      }
+      const out = fs.createWriteStream(dest);
+      res.pipe(out);
+      out.on('finish', resolve);
+      out.on('error', reject);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    job.kill = () => req.destroy(new Error(L('Отменено', 'Cancelled')));
+  });
+}
+
+// A part of a long recording in pieces (Twitch and YouTube give HLS): only the pieces that
+// cover from-to are downloaded, put together and cut with ffmpeg. Letting ffmpeg seek in the
+// stream itself reads it from the start, which for an hour into a recording takes ages.
+async function hlsPart(f, dir, from, to, jobId) {
+  const list = await getText(f.url);
+  if (/#EXT-X-KEY:METHOD=(?!NONE)/.test(list)) return null; // encrypted: left to yt-dlp
+  const map = /#EXT-X-MAP:URI="([^"]+)"/.exec(list);
+  const segs = [];
+  let at = 0;
+  let dur = 0;
+  for (const line of list.split(/\r?\n/)) {
+    const inf = /^#EXTINF:([\d.]+)/.exec(line);
+    if (inf) dur = Number(inf[1]);
+    else if (line && !line.startsWith('#')) {
+      segs.push({ uri: new URL(line, f.url).toString(), start: at, dur });
+      at += dur;
+    }
+  }
+  const end = to != null ? Math.min(to, at) : at;
+  const pick = segs.filter(x => x.start + x.dur > from && x.start < end);
+  if (!pick.length) throw new Error(L('В записи нет такого времени', 'The recording has no such time'));
+  const tmp = fs.mkdtempSync(path.join(app.getPath('temp'), 'tako-link-'));
+  const job = { cancelled: false, kill: () => {} };
+  jobs.set(jobId, job);
+  try {
+    const joined = path.join(tmp, 'joined' + (map ? '.mp4' : '.ts'));
+    const parts = map ? [new URL(map[1], f.url).toString(), ...pick.map(x => x.uri)] : pick.map(x => x.uri);
+    for (let i = 0; i < parts.length; i++) {
+      if (job.cancelled) throw new Error(L('Отменено', 'Cancelled'));
+      const piece = path.join(tmp, `p${i}`);
+      await fetchFile(parts[i], piece, job);
+      fs.appendFileSync(joined, fs.readFileSync(piece));
+      fs.rmSync(piece, { force: true });
+      linkProgress(jobId, (i + 1) / parts.length * 0.95, 'download');
+    }
+    const clock = t => new Date(t * 1000).toISOString().slice(11, 19).replace(/:/g, '-');
+    const name = `${(f.title || 'video').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80).trim()} [${f.id || ''}] ${clock(from)}–${clock(end)}.mp4`;
+    const out = path.join(dir, name);
+    await run(FFMPEG, ['-hide_banner', '-y', '-ss', num(from - pick[0].start), '-i', joined, '-t', num(end - from),
+      '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', out]);
+    linkProgress(jobId, 1, 'download');
+    return out;
+  } finally {
+    jobs.delete(jobId);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// For the editor: the video (or a part of it, from-to in seconds) saved into a folder
+ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {
+  const exe = await ytdlpEnsure(jobId);
+  if (from != null || to != null) {
+    const f = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]', url], jobId).catch(() => 'null'));
+    if (f && f.url && /m3u8/.test(f.protocol || '') && !f.is_live) {
+      const file = await hlsPart(f, dir, from || 0, to, jobId);
+      if (file) return { file };
+    }
+  }
+  const args = ['--no-playlist', '--newline', '--no-warnings', '--no-part',
+    '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4',
+    '--ffmpeg-location', FFMPEG, '-P', dir, '-o', '%(title).90B [%(id)s].%(ext)s',
+    '--windows-filenames', '--print', 'after_move:filepath'];
+  const part = from != null || to != null;
+  if (part) args.push('--download-sections', `*${from || 0}-${to != null ? to : 'inf'}`);
+  args.push(url);
+  const span = part && to != null ? to - (from || 0) : 0;
+  let file = '';
+  await ytdlp(exe, args, jobId, line => {
+    // "[download]  42.0% of 120.00MiB …", or ffmpeg's "time=00:01:02.50" when a part is cut out
+    const pc = /\[download\]\s+([\d.]+)%/.exec(line);
+    if (pc) linkProgress(jobId, Number(pc[1]) / 100, 'download');
+    const tm = /time=(\d+):(\d+):([\d.]+)/.exec(line);
+    if (tm && span > 0) linkProgress(jobId, Math.min(1, (tm[1] * 3600 + tm[2] * 60 + Number(tm[3])) / span), 'download');
+    if (/^[A-Za-z]:\\/.test(line.trim())) file = line.trim();
+  });
+  if (!file || !fs.existsSync(file)) throw new Error(L('yt-dlp не сообщил, куда сохранил файл', 'yt-dlp did not say where it saved the file'));
+  return { file };
+});
+
+ipcMain.handle('link-pick-dir', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+});
 
 ipcMain.handle('asr-info', (_e, dir) => {
   const d = dir || defaultModelsDir();

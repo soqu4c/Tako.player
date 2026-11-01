@@ -1381,3 +1381,17 @@ body.halloween .empty-glow { background: radial-gradient(closest-side, rgba(255,
 body.no-motion .hw-bat { animation: none; left: 20%; }
 body.no-motion .hw-bat.b2 { left: 70%; } body.no-motion .hw-bat.b3 { left: 85%; } body.no-motion .hw-bat.b4 { left: 40%; } body.no-motion .hw-bat.b5 { left: 60%; } body.no-motion .hw-bat.b6 { left: 8%; }
 body.halloween #empty > :not(.hw-bats):not(.hw-web):not(.empty-glow) { z-index: 1; }
+
+/* ---------- a video by link */
+.link-input { width: 100%; box-sizing: border-box; text-align: left; padding: 9px 12px; font-size: 13.5px; margin: 4px 0 10px; }
+.link-part { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; font-size: 13px; color: var(--soft); }
+.link-cut { display: flex; align-items: center; gap: 8px; }
+.link-cut .time-input { width: 86px; }
+.link-dir { display: flex; align-items: center; gap: 8px; }
+.link-dir b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+#link-dlg { width: 520px; }
+/* a video by link: what needs the file on disk is not offered; a live stream has no seek bar */
+body.link .pick:has(#audio-select), body.link #btn-names, body.link #btn-mixlisten, body.link .pick:has(#sub-select),
+body.link #btn-markers, body.link #btn-trim, body.link #btn-draw, body.link #btn-shot { display: none; }
+body.link-live #timeline { visibility: hidden; }
+body.link-live #time { color: #ff4d4d; font-weight: 700; }

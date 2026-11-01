@@ -998,15 +998,19 @@ lanesBox.addEventListener('pointerdown', e => {
     splitClips(e.shiftKey ? ed.p.clips.filter(x => !isLocked(x)) : [c], at);
     return;
   }
-  // a click picks just this clip; its linked halves still move with it
+  // a click picks just this clip; its linked halves still move with it. Grabbing a clip that
+  // is already in the selection drags the whole selection (as in Premiere); a plain click on
+  // it without moving then leaves only that clip selected
+  let narrowOnClick = false;
   if (e.shiftKey || e.ctrlKey) ed.sel.has(c.id) ? ed.sel.delete(c.id) : ed.sel.add(c.id);
+  else if (ed.sel.has(c.id) && ed.sel.size > 1) narrowOnClick = true;
   else ed.sel = new Set([c.id]);
   renderTimeline();
   renderInspector();
   if (e.target.classList.contains('ed-vol')) return dragLevel(e, c);
   if (e.target.classList.contains('ed-fh')) return dragFade(e, c, e.target.classList.contains('l') ? 'fadeIn' : 'fadeOut');
   const edge = e.target.classList.contains('ed-edge') ? (e.target.classList.contains('l') ? 'l' : 'r') : null;
-  dragClips(e, c, edge);
+  dragClips(e, c, edge, narrowOnClick);
 });
 
 // Hand: drag the timeline sideways (and up and down)
@@ -1079,7 +1083,7 @@ function dragFade(e, c, key) {
   lanesBox.addEventListener('pointerup', up);
 }
 
-function dragClips(e, c, edge) {
+function dragClips(e, c, edge, narrowOnClick = false) {
   const picked = ed.p.clips.filter(x => ed.sel.has(x.id));
   const group = edge ? partners(c) : [...new Set(picked.flatMap(partners))];
   const orig = new Map(group.map(x => [x.id, { ...x }]));
@@ -1137,7 +1141,14 @@ function dragClips(e, c, edge) {
     lanesBox.removeEventListener('pointermove', move);
     lanesBox.removeEventListener('pointerup', up);
     showSnap(null);
-    if (!committed) return;
+    if (!committed) {
+      if (narrowOnClick) {
+        ed.sel = new Set([c.id]);
+        renderTimeline();
+        renderInspector();
+      }
+      return;
+    }
     resolveOverlaps(group);
     edChanged();
   };

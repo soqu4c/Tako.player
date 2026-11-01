@@ -3,6 +3,26 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.5',
+    date: '2026-11-01',
+    sections: [
+      [['Эфиры', 'Live streams'], [
+        ['Twitch и Kick: «⏮ С начала эфира» — весь идущий стрим можно мотать назад, «● В эфир» возвращает', 'Twitch and Kick: “⏮ From the start” lets you seek back through the whole running stream, “● Go live” returns'],
+        ['Реклама Twitch пропускается — без «Commercial break» и чёрного экрана после неё', 'Twitch ads are skipped — no “Commercial break” and no black screen after it'],
+        ['Выбор качества (Авто, 1080p, 720p…), плеер сам подстраивается под скорость интернета', 'Quality choice (Auto, 1080p, 720p…), the player adapts to the connection speed'],
+        ['YouTube: обход блокировки DNS, оригинальная озвучка вместо автоматической английской', 'YouTube: works around DNS blocking, plays the original sound instead of auto-dubbing'],
+        ['Ссылки можно вставлять без https:// (kick.com/канал)', 'Links work without https:// (kick.com/name)'],
+      ]],
+      [['Видеоредактор', 'Video editor'], [
+        ['Кнопка «Ссылка»: видео или кусок эфира скачивается и сразу встаёт на таймлайн', 'The “Link” button: a video or a part of a stream is downloaded and put straight onto the timeline'],
+        ['В узкой панели «Проект» кнопки становятся значками и не обрезаются', 'In a narrow Project panel the buttons turn into icons and are not cut off'],
+      ]],
+      [['Обновления', 'Updates'], [
+        ['Новая версия показывается плашкой сверху по центру: загрузка, потом «Обновить»', 'A new version shows a small notice at the top: download progress, then “Update”'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0-beta.4',
     date: '2026-11-01',
     sections: [

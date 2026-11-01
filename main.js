@@ -975,8 +975,20 @@ function startDohProxy() {
   });
 }
 
-// Runs yt-dlp (through the DoH proxy); onLine gets each line of its output as it comes
+// Runs yt-dlp; a slow or broken connection ("Read timed out") gets one more try
+const NET_HICCUP = /timed out|Unable to download|TransportError|Connection (reset|aborted)|RemoteDisconnected/i;
 async function ytdlp(exe, args, jobId, onLine) {
+  try {
+    return await ytdlpOnce(exe, args, jobId, onLine);
+  } catch (e) {
+    const job = jobId && jobs.get(jobId);
+    if ((job && job.cancelled) || !NET_HICCUP.test(e.message)) throw e;
+    return ytdlpOnce(exe, args, jobId, onLine);
+  }
+}
+
+// Runs yt-dlp (through the DoH proxy); onLine gets each line of its output as it comes
+async function ytdlpOnce(exe, args, jobId, onLine) {
   const port = await startDohProxy().catch(() => 0);
   if (port) args = ['--proxy', `http://127.0.0.1:${port}`, ...args];
   if (fs.existsSync(denoExe())) args = ['--js-runtimes', `deno:${denoExe()}`, ...args];
@@ -1116,28 +1128,55 @@ async function hlsPart(f, dir, from, to, jobId) {
 // The recording of a Twitch stream that is still going on: the channel's newest recording, if it
 // is marked live or began with this stream. Channels that hide recordings until the end (or keep
 // them for subscribers) have none, and the stream is then only watched live.
-ipcMain.handle('link-archive', async (_e, { page, started }) => {
-  const m = /twitch\.tv\/(\w+)/i.exec(page || '');
-  if (!m || m[1] === 'videos') return null;
+// The Twitch channel a link points at ("twitch.tv/name"), not a recording or a clip
+const twitchChannel = url => {
+  const m = /twitch\.tv\/(\w+)\/?(?:[?#]|$)/i.exec(url || '');
+  return m && !['videos', 'directory', 'clip'].includes(m[1].toLowerCase()) ? m[1] : null;
+};
+
+async function findArchive(page, started) {
+  const name = twitchChannel(page);
+  if (!name) return null;
   const exe = await ytdlpEnsure();
-  const list = await ytdlp(exe, ['--no-warnings', '--flat-playlist', '-I', '1', '--print', 'url', `https://www.twitch.tv/${m[1]}/videos?filter=archives&sort=time`]).catch(() => '');
+  // asked twice: a single hiccup of the site must not read as "no recording"
+  const ask = () => ytdlp(exe, ['--no-warnings', '--flat-playlist', '-I', '1', '--print', 'url', `https://www.twitch.tv/${name}/videos?filter=archives&sort=time`]);
+  const list = await ask().catch(() => ask()).catch(() => '');
   const vod = list.trim().split(/\r?\n/).pop();
   if (!/^https:\/\/www\.twitch\.tv\/videos\/\d+/.test(vod || '')) return null;
   const j = JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', '-f', PLAY_FORMAT, vod]).catch(() => 'null'));
   if (!j || !j.url) return null;
   const ongoing = j.live_status === 'is_live' || (started && Math.abs((j.timestamp || 0) - started) < 900);
   return ongoing ? { url: j.manifest_url || j.url, duration: j.duration || 0, page: vod } : null;
-});
+}
+ipcMain.handle('link-archive', (_e, { page, started }) => findArchive(page, started));
+
+// A live stream as such cannot be downloaded (it has no end): its recording is taken instead.
+// Without a chosen part, the last few minutes ("what just happened").
+const LIVE_TAIL = 5 * 60;
 
 // For the editor: the video (or a part of it, from-to in seconds) saved into a folder
 ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {
   const exe = await ytdlpEnsure(jobId);
   if (isYouTube(url)) await denoEnsure(jobId);
+  if (twitchChannel(url)) {
+    const live = JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', '-f', PLAY_FORMAT, url], jobId));
+    if (live.is_live) {
+      const a = await findArchive(url, live.timestamp);
+      if (!a) throw new Error(L('У этого эфира нет записи (стример её скрывает) — скачать кусок можно будет после конца стрима', 'This stream has no recording (the streamer hides it) — a part can be downloaded after the stream ends'));
+      url = a.page;
+      if (from == null && to == null) {
+        from = Math.max(0, a.duration - LIVE_TAIL);
+        to = a.duration;
+      }
+    }
+  }
   if (from != null || to != null) {
     const f = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]', url], jobId).catch(() => 'null'));
     // only a stream with its sound in it (Twitch); YouTube's streams are picture or sound alone,
-    // so a part of those is cut by yt-dlp itself
-    if (f && f.url && /m3u8/.test(f.protocol || '') && !f.is_live && f.acodec !== 'none' && f.vcodec !== 'none') {
+    // so a part of those is cut by yt-dlp itself. The recording of a stream still going on counts
+    // as live too, but its pieces are all there from the start.
+    const recording = /twitch\.tv\/videos\//i.test(url);
+    if (f && f.url && /m3u8/.test(f.protocol || '') && (!f.is_live || recording) && f.acodec !== 'none' && f.vcodec !== 'none') {
       const file = await hlsPart(f, dir, from || 0, to, jobId);
       if (file) return { file };
     }

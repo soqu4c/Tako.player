@@ -1412,3 +1412,4 @@ body.no-motion #upd-note.in { animation: none; }
 #quality[hidden] { display: none; }
 #link-dvr { margin-left: 8px; padding: 3px 10px; font-size: 12px; }
 #link-dvr[hidden] { display: none; }
+.link-hint { color: var(--muted); font-size: 12px; line-height: 1.45; }

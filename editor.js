@@ -2551,7 +2551,13 @@ $('#link-download').onclick = async () => {
   try {
     const { file } = await api.linkDownload({ url, dir, from, to, jobId: job });
     const [m] = await edImport([file]);
-    toast(`Скачано и добавлено в проект: ${m ? m.name : api.basename(file)}`, 'Показать в папке', () => api.reveal(file));
+    // straight onto the timeline, after what is already there
+    if (m) {
+      const at = edDuration();
+      edPlace(m, null, at);
+      seekEd(at);
+    }
+    toast(`Скачано и поставлено на таймлайн: ${m ? m.name : api.basename(file)}`, 'Показать в папке', () => api.reveal(file));
   } catch (e) {
     toast(`Не удалось скачать:\n${cleanErr(e)}`);
   } finally {

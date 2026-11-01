@@ -1410,3 +1410,5 @@ body.link-live #time { color: #ff4d4d; font-weight: 700; }
 #upd-close { color: var(--muted); }
 body.no-motion #upd-note.in { animation: none; }
 #quality[hidden] { display: none; }
+#link-dvr { margin-left: 8px; padding: 3px 10px; font-size: 12px; }
+#link-dvr[hidden] { display: none; }

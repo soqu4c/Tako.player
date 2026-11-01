@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   asrRun: opts => ipcRenderer.invoke('asr-run', opts),
   onAsrProgress: cb => ipcRenderer.on('asr-progress', (_e, d) => cb(d)),
   linkResolve: o => ipcRenderer.invoke('link-resolve', o),
+  linkArchive: o => ipcRenderer.invoke('link-archive', o),
   linkDownload: o => ipcRenderer.invoke('link-download', o),
   linkPickDir: () => ipcRenderer.invoke('link-pick-dir'),
   onLinkProgress: cb => ipcRenderer.on('link-progress', (_e, d) => cb(d)),

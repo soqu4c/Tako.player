@@ -464,6 +464,27 @@ const NoAdsLoader = window.Hls ? class extends Hls.DefaultConfig.loader {
   }
 } : null;
 
+// A Twitch stream with its recording: "From the start" plays the recording (the seek bar then
+// covers the whole stream so far, a minute or two behind), "Live" goes back to the stream itself
+function renderDvr() {
+  const link = state.info && state.info.link;
+  const b = $('#link-dvr');
+  b.hidden = !(link && link.archive);
+  if (b.hidden) return;
+  b.textContent = link.dvr ? '● В эфир' : '⏮ С начала эфира';
+  b.title = link.dvr ? 'Вернуться в прямой эфир' : 'Весь эфир с самого начала: можно мотать назад';
+  document.body.classList.toggle('link-live', !link.dvr);
+}
+$('#link-dvr').onclick = e => {
+  e.currentTarget.blur();
+  const link = state.info && state.info.link;
+  if (!link || !link.archive) return;
+  link.dvr = !link.dvr;
+  renderDvr();
+  setSource(link.dvr ? link.archive.url : link.url, link.dvr ? Math.max(0, link.archive.duration - 10) : 0, true);
+  osd(link.dvr ? 'Запись эфира: тяните полосу назад, чтобы смотреть с начала' : 'Прямой эфир');
+};
+
 $('#quality').addEventListener('change', e => {
   const k = Number(e.target.value);
   e.target.blur();
@@ -476,6 +497,7 @@ $('#quality').addEventListener('change', e => {
 function dropHls() {
   adShown = false;
   $('#quality').hidden = true;
+  if (!(state.info && state.info.link && state.info.link.archive)) $('#link-dvr').hidden = true;
   if (!state.hls) return;
   state.hls.destroy();
   state.hls = null;
@@ -549,6 +571,14 @@ async function loadLink(item, token, startAt) {
   state.baseLevel = 0;
   setSource(r.url, startAt, true);
   if (r.live) osd(`Прямой эфир${r.site ? ' · ' + r.site : ''}`);
+  // in the background: is the stream being recorded? then all of it can be watched from the start
+  if (r.live && /twitch/i.test(r.site)) {
+    api.linkArchive({ page: r.page, started: r.started }).then(a => {
+      if (token !== state.token || !a) return;
+      r.archive = a;
+      renderDvr();
+    }).catch(() => {});
+  }
 }
 
 api.onLinkProgress(({ jobId, value, stage }) => {
@@ -1311,7 +1341,7 @@ function updateProgress() {
   const f = state.precise ? fmtPrecise : fmt;
   $('#time').textContent = state.info ? `${f(t)} / ${fmt(d)}` : '0:00 / 0:00';
   // a live stream has no length; the seek bar covers only the few seconds already buffered
-  if (state.info && state.info.link && state.info.link.live) $('#time').textContent = '● В эфире';
+  if (state.info && state.info.link && state.info.link.live && !state.info.link.dvr) $('#time').textContent = '● В эфире';
 }
 
 // ---------- trimming

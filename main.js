@@ -1038,6 +1038,7 @@ ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
     width: j.width || 0,
     height: j.height || 0,
     page: j.webpage_url || url,
+    started: j.timestamp || 0,
   };
 });
 
@@ -1111,6 +1112,22 @@ async function hlsPart(f, dir, from, to, jobId) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
+
+// The recording of a Twitch stream that is still going on: the channel's newest recording, if it
+// is marked live or began with this stream. Channels that hide recordings until the end (or keep
+// them for subscribers) have none, and the stream is then only watched live.
+ipcMain.handle('link-archive', async (_e, { page, started }) => {
+  const m = /twitch\.tv\/(\w+)/i.exec(page || '');
+  if (!m || m[1] === 'videos') return null;
+  const exe = await ytdlpEnsure();
+  const list = await ytdlp(exe, ['--no-warnings', '--flat-playlist', '-I', '1', '--print', 'url', `https://www.twitch.tv/${m[1]}/videos?filter=archives&sort=time`]).catch(() => '');
+  const vod = list.trim().split(/\r?\n/).pop();
+  if (!/^https:\/\/www\.twitch\.tv\/videos\/\d+/.test(vod || '')) return null;
+  const j = JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', '-f', PLAY_FORMAT, vod]).catch(() => 'null'));
+  if (!j || !j.url) return null;
+  const ongoing = j.live_status === 'is_live' || (started && Math.abs((j.timestamp || 0) - started) < 900);
+  return ongoing ? { url: j.manifest_url || j.url, duration: j.duration || 0, page: vod } : null;
+});
 
 // For the editor: the video (or a part of it, from-to in seconds) saved into a folder
 ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {

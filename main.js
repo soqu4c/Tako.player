@@ -929,11 +929,12 @@ function dohLookup(host) {
   return ask(DOH[0]).catch(() => ask(DOH[1]));
 }
 
-// The ordinary lookup first; DoH when it fails or gives nothing
+// DoH first: a provider may also answer with a wrong address that does not open (Kick's video
+// server), not only with "no such site". The ordinary lookup when DoH cannot be reached.
 function lookupHost(host) {
   if (net.isIP(host)) return Promise.resolve(host);
-  return new Promise(resolve => require('dns').lookup(host, { family: 4 }, (err, ip) => resolve(err ? null : ip)))
-    .then(ip => ip || dohLookup(host));
+  return dohLookup(host).catch(() => new Promise((resolve, reject) =>
+    require('dns').lookup(host, { family: 4 }, (err, ip) => (err ? reject(err) : resolve(ip)))));
 }
 // The same for Node's own requests (https.get's lookup option)
 function dohAwareLookup(host, opts, cb) {
@@ -1058,7 +1059,7 @@ ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
 // A file from the web into dest (redirects followed); stops when the job is cancelled
 function fetchFile(url, dest, job, hops = 0) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` }, lookup: dohAwareLookup }, res => {
+    const req = https.get(url, { headers: { 'User-Agent': BROWSER_UA }, lookup: dohAwareLookup }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
         res.resume();
         return resolve(fetchFile(new URL(res.headers.location, url).toString(), dest, job, hops + 1));
@@ -1081,8 +1082,24 @@ function fetchFile(url, dest, job, hops = 0) {
 // A part of a long recording in pieces (Twitch and YouTube give HLS): only the pieces that
 // cover from-to are downloaded, put together and cut with ffmpeg. Letting ffmpeg seek in the
 // stream itself reads it from the start, which for an hour into a recording takes ages.
+// from below zero counts from the end ("the last five minutes"); f.url may be the list of
+// qualities, then the best one up to 1080p is taken
 async function hlsPart(f, dir, from, to, jobId) {
-  const list = await getText(f.url);
+  let list = await getText(f.url, 0, BROWSER_UA);
+  if (list.includes('#EXT-X-STREAM-INF')) {
+    const lines = list.split(/\r?\n/);
+    let best = null;
+    lines.forEach((l, i) => {
+      if (!l.startsWith('#EXT-X-STREAM-INF')) return;
+      const h = Number((/RESOLUTION=\d+x(\d+)/.exec(l) || [])[1]) || 0;
+      const bw = Number((/BANDWIDTH=(\d+)/.exec(l) || [])[1]) || 0;
+      const uri = (lines.slice(i + 1).find(x => x && !x.startsWith('#')) || '').trim();
+      if (uri && h <= 1080 && (!best || h > best.h || (h === best.h && bw > best.bw))) best = { h, bw, uri };
+    });
+    if (!best) return null;
+    f = { ...f, url: new URL(best.uri, f.url).toString() };
+    list = await getText(f.url, 0, BROWSER_UA);
+  }
   if (/#EXT-X-KEY:METHOD=(?!NONE)/.test(list)) return null; // encrypted: left to yt-dlp
   const map = /#EXT-X-MAP:URI="([^"]+)"/.exec(list);
   const segs = [];
@@ -1096,6 +1113,7 @@ async function hlsPart(f, dir, from, to, jobId) {
       at += dur;
     }
   }
+  if (from < 0) from = Math.max(0, at + from);
   const end = to != null ? Math.min(to, at) : at;
   const pick = segs.filter(x => x.start + x.dur > from && x.start < end);
   if (!pick.length) throw new Error(L('В записи нет такого времени', 'The recording has no such time'));
@@ -1180,9 +1198,15 @@ ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {
     if (live.is_live) {
       const a = await findArchive(url, live.timestamp);
       if (!a || !a.page) throw new Error(L('У этого эфира нет записи (стример её скрывает) — скачать кусок можно будет после конца стрима', 'This stream has no recording (the streamer hides it) — a part can be downloaded after the stream ends'));
+      // Kick's recording of a stream still going on is "not found" for yt-dlp: its pieces are
+      // taken straight from the recording's list
+      if (kickChannel(url)) {
+        const id = (/videos\/([\w-]+)/.exec(a.page) || [])[1] || '';
+        const file = await hlsPart({ url: a.url, title: live.title || live.uploader || 'kick', id }, dir, from == null && to == null ? -LIVE_TAIL : from || 0, to, jobId);
+        if (!file) throw new Error(L('Запись этого эфира закрыта', 'This stream recording is protected'));
+        return { file };
+      }
       url = a.page;
-      // Kick does not say how long its recording is yet; yt-dlp reads it from the recording
-      if (!a.duration) a.duration = (JSON.parse(await ytdlp(exe, ['-J', '--no-warnings', url], jobId).catch(() => 'null')) || {}).duration || 0;
       if (from == null && to == null) {
         from = Math.max(0, a.duration - LIVE_TAIL);
         to = a.duration;

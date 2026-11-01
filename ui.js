@@ -96,18 +96,11 @@ window.addEventListener('error', e => noteError(e.message + (e.filename ? ` (${e
 window.addEventListener('unhandledrejection', e => noteError(String((e.reason && (e.reason.stack || e.reason.message)) || e.reason).split('\n').slice(0, 3).join(' | ')));
 const reportBug = where => api.reportBug({ errors: recentErrors, where });
 
-// ---------- opening a link: watched in the player, or downloaded into the editor's project
+// ---------- opening a link to watch in the player
 
 const linkUrls = () => $('#link-url').value.split(/\s+/).filter(u => LINK_RE.test(u));
 function openLinkDialog(url = '') {
-  const inEditor = currentView === 'editor';
   $('#link-url').value = url;
-  $('#link-part').hidden = !inEditor;
-  $('#link-download').hidden = !inEditor;
-  // in the editor the point is to download; in the player, to watch
-  $('#link-download').classList.toggle('accent', inEditor);
-  $('#link-watch').classList.toggle('accent', !inEditor);
-  $('#link-dir-text').textContent = recall('edLinkDir', null) || 'папку выберете при скачивании';
   $('#link-dlg').showModal();
   $('#link-url').focus();
 }
@@ -124,14 +117,8 @@ $('#link-watch').onclick = () => {
 $('#link-url').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
-  ($('#link-download').hidden ? $('#link-watch') : $('#link-download')).click();
+  $('#link-watch').click();
 });
-$('#link-dir').onclick = async () => {
-  const dir = await api.linkPickDir();
-  if (!dir) return;
-  store('edLinkDir', dir);
-  $('#link-dir-text').textContent = dir;
-};
 $('#btn-open-link-big').onclick = () => openLinkDialog();
 // A link pasted anywhere in the player (not into a text field) opens right away
 document.addEventListener('paste', e => {
@@ -140,7 +127,7 @@ document.addEventListener('paste', e => {
   const urls = (e.clipboardData.getData('text') || '').trim().split(/\s+/).filter(u => LINK_RE.test(u));
   if (!urls.length) return;
   e.preventDefault();
-  if (currentView === 'editor') return openLinkDialog(urls[0]);
+  if (currentView === 'editor') return; // the editor keeps Ctrl+V for its clips
   if (currentView !== 'player') showView('player');
   openLinks(urls);
 });

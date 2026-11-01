@@ -1384,11 +1384,6 @@ body.halloween #empty > :not(.hw-bats):not(.hw-web):not(.empty-glow) { z-index: 
 
 /* ---------- a video by link */
 .link-input { width: 100%; box-sizing: border-box; text-align: left; padding: 9px 12px; font-size: 13.5px; margin: 4px 0 10px; }
-.link-part { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; font-size: 13px; color: var(--soft); }
-.link-cut { display: flex; align-items: center; gap: 8px; }
-.link-cut .time-input { width: 86px; }
-.link-dir { display: flex; align-items: center; gap: 8px; }
-.link-dir b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
 #link-dlg { width: 520px; }
 /* a video by link: what needs the file on disk is not offered; a live stream has no seek bar */
 body.link .pick:has(#audio-select), body.link #btn-names, body.link #btn-mixlisten, body.link .pick:has(#sub-select),

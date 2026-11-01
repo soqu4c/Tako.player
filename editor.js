@@ -2255,7 +2255,7 @@ document.addEventListener('keydown', e => {
   let fn = keys[e.code];
   if (ctrl && e.altKey && e.code === 'KeyM') fn = clearMarkers;
   else if (ctrl) {
-    fn = { KeyZ: () => edUndo(!e.shiftKey), KeyY: () => edUndo(false), KeyA: () => { ed.sel = new Set(ed.p.clips.map(c => c.id)); renderTimeline(); renderInspector(); }, KeyC: copySelected, KeyV: pasteClips, KeyM: () => $('#ed-export').click(), KeyI: () => $('#ed-import').click(), KeyU: () => openLinkDialog(), KeyX: () => { copySelected(); deleteSelected(); } }[e.code];
+    fn = { KeyZ: () => edUndo(!e.shiftKey), KeyY: () => edUndo(false), KeyA: () => { ed.sel = new Set(ed.p.clips.map(c => c.id)); renderTimeline(); renderInspector(); }, KeyC: copySelected, KeyV: pasteClips, KeyM: () => $('#ed-export').click(), KeyI: () => $('#ed-import').click(), KeyX: () => { copySelected(); deleteSelected(); } }[e.code];
   }
   if (!fn) return;
   e.preventDefault();
@@ -2519,52 +2519,6 @@ $('#ed-ex-go').onclick = async () => {
 };
 $('#ed-progress-cancel').onclick = () => { if (edJob) api.cancel(edJob); };
 
-// A video from a link, or a part of it, downloaded into a folder and added to the project
-$('#ed-link').onclick = () => openLinkDialog();
-$('#link-download').onclick = async () => {
-  const [url] = linkUrls();
-  if (!url) {
-    toast('Вставьте ссылку, которая начинается с https://');
-    return;
-  }
-  let from = null, to = null;
-  if ($('#link-cut').checked) {
-    from = parseTime($('#link-from').value || '0');
-    to = $('#link-to').value.trim() ? parseTime($('#link-to').value) : null;
-    if (from == null || (to != null && to <= from)) {
-      toast('Проверьте время куска: например, с 1:20:00 по 1:25:00');
-      return;
-    }
-  }
-  let dir = recall('edLinkDir', null);
-  if (!dir) {
-    dir = await api.linkPickDir();
-    if (!dir) return;
-    store('edLinkDir', dir);
-  }
-  $('#link-dlg').close();
-  edJob = newJob();
-  const job = edJob;
-  $('#ed-progress').hidden = false;
-  $('#ed-progress-bar').style.width = '0%';
-  $('#ed-progress-text').textContent = 'Узнаю, что по ссылке…';
-  try {
-    const { file } = await api.linkDownload({ url, dir, from, to, jobId: job });
-    const [m] = await edImport([file]);
-    toast(`Скачано и добавлено в проект: ${m ? m.name : api.basename(file)}`, 'Показать в папке', () => api.reveal(file));
-  } catch (e) {
-    toast(`Не удалось скачать:\n${cleanErr(e)}`);
-  } finally {
-    if (edJob === job) edJob = null;
-    $('#ed-progress').hidden = true;
-  }
-};
-api.onLinkProgress(({ jobId, value, stage }) => {
-  if (jobId !== edJob) return;
-  const pct = Math.round(value * 100);
-  $('#ed-progress-text').textContent = stage === 'tool' ? `Первый раз: скачиваю yt-dlp… ${pct}%` : stage === 'download' ? `Скачиваю… ${pct}%` : 'Узнаю, что по ссылке…';
-  $('#ed-progress-bar').style.width = (stage === 'resolve' ? 0 : pct) + '%';
-});
 api.onProgress(({ jobId, value }) => {
   if (jobId !== edJob) return;
   const pct = Math.round(value * 100) + '%';

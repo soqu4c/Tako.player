@@ -390,7 +390,7 @@ function dropHls() {
 const isLink = () => !!(state.info && state.info.link);
 function linkOnlyFile() {
   if (!isLink()) return false;
-  toast('Для видео по ссылке это недоступно. Скачайте его: редактор → «Ссылка» → «Скачать в проект».');
+  toast('Для видео по ссылке это недоступно — только просмотр.');
   return true;
 }
 const LINK_RE = /^https?:\/\/\S+$/i;

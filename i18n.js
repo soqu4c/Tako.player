@@ -403,7 +403,6 @@ const I18N_EN = {
   'Сообщить об ошибке': 'Report a problem',
   'Видео по ссылке': 'Video by link',
   'Ссылка': 'Link',
-  'Скачать в проект': 'Download into the project',
   'Открываю ссылку…': 'Opening the link…',
   '● В эфире': '● Live',
   'Видео по ссылке (YouTube, Twitch…)': 'Video by link (YouTube, Twitch…)',

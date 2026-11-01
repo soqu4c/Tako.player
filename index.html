@@ -362,7 +362,6 @@
               <span class="on" data-bintab="bin">Проект</span>
               <span data-bintab="hist" title="Все изменения проекта: нажмите на шаг, чтобы вернуться к нему">История</span>
               <span class="ed-flex"></span>
-              <button id="ed-link" class="btn small" title="Скачать видео с YouTube, Twitch и других сайтов в проект (Ctrl+U)"><svg class="i"><use href="#i-link"/></svg>Ссылка</button>
               <button id="ed-import" class="btn small accent" title="Добавить файлы в проект (Ctrl+I)"><svg class="i"><use href="#i-plus"/></svg>Импорт</button>
             </div>
             <div id="ed-bin-list"><div class="ed-hint">Добавьте видео, музыку или картинки и перетащите их на таймлайн. Исходные файлы не изменяются.</div></div>
@@ -427,13 +426,8 @@
   <h2>Видео по ссылке</h2>
   <p class="hint">YouTube, Twitch, VK Видео, Kick, Rutube и сотни других сайтов — прямые эфиры и записи. Ссылку можно просто вставить в плеер через Ctrl+V.</p>
   <input id="link-url" class="link-input" placeholder="https://www.twitch.tv/…" spellcheck="false">
-  <div id="link-part" class="link-part" hidden>
-    <label class="link-cut"><input type="checkbox" id="link-cut"> Только кусок: с <input id="link-from" class="time-input" placeholder="1:20:00"> по <input id="link-to" class="time-input" placeholder="1:25:00"></label>
-    <div class="link-dir">Сохранить в: <b id="link-dir-text">папку выберете при скачивании</b> <button id="link-dir" class="btn small ghost">Изменить…</button></div>
-  </div>
   <div class="actions">
     <button class="btn close-dlg">Отмена</button>
-    <button id="link-download" class="btn" hidden>Скачать в проект</button>
     <button id="link-watch" class="btn accent">Смотреть</button>
   </div>
 </dialog>

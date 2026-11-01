@@ -833,7 +833,7 @@ const linkProgress = (jobId, value, stage) => { if (win) win.webContents.send('l
 
 function getText(url, hops = 0) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` } }, res => {
+    https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` }, lookup: dohAwareLookup }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
         res.resume();
         return resolve(getText(new URL(res.headers.location, url).toString(), hops + 1));
@@ -933,6 +933,13 @@ function lookupHost(host) {
   if (net.isIP(host)) return Promise.resolve(host);
   return new Promise(resolve => require('dns').lookup(host, { family: 4 }, (err, ip) => resolve(err ? null : ip)))
     .then(ip => ip || dohLookup(host));
+}
+// The same for Node's own requests (https.get's lookup option)
+function dohAwareLookup(host, opts, cb) {
+  lookupHost(host).then(ip => {
+    if (opts && opts.all) cb(null, [{ address: ip, family: 4 }]);
+    else cb(null, ip, 4);
+  }, cb);
 }
 
 let dohProxyPort = 0;
@@ -1034,6 +1041,115 @@ ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
   };
 });
 
+// A file from the web into dest (redirects followed); stops when the job is cancelled
+function fetchFile(url, dest, job, hops = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` }, lookup: dohAwareLookup }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
+        res.resume();
+        return resolve(fetchFile(new URL(res.headers.location, url).toString(), dest, job, hops + 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(L(`сервер ответил ${res.statusCode}`, `the server answered ${res.statusCode}`)));
+      }
+      const out = fs.createWriteStream(dest);
+      res.pipe(out);
+      out.on('finish', resolve);
+      out.on('error', reject);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    job.kill = () => req.destroy(new Error(L('Отменено', 'Cancelled')));
+  });
+}
+
+// A part of a long recording in pieces (Twitch and YouTube give HLS): only the pieces that
+// cover from-to are downloaded, put together and cut with ffmpeg. Letting ffmpeg seek in the
+// stream itself reads it from the start, which for an hour into a recording takes ages.
+async function hlsPart(f, dir, from, to, jobId) {
+  const list = await getText(f.url);
+  if (/#EXT-X-KEY:METHOD=(?!NONE)/.test(list)) return null; // encrypted: left to yt-dlp
+  const map = /#EXT-X-MAP:URI="([^"]+)"/.exec(list);
+  const segs = [];
+  let at = 0;
+  let dur = 0;
+  for (const line of list.split(/\r?\n/)) {
+    const inf = /^#EXTINF:([\d.]+)/.exec(line);
+    if (inf) dur = Number(inf[1]);
+    else if (line && !line.startsWith('#')) {
+      segs.push({ uri: new URL(line, f.url).toString(), start: at, dur });
+      at += dur;
+    }
+  }
+  const end = to != null ? Math.min(to, at) : at;
+  const pick = segs.filter(x => x.start + x.dur > from && x.start < end);
+  if (!pick.length) throw new Error(L('В записи нет такого времени', 'The recording has no such time'));
+  const tmp = fs.mkdtempSync(path.join(app.getPath('temp'), 'tako-link-'));
+  const job = { cancelled: false, kill: () => {} };
+  jobs.set(jobId, job);
+  try {
+    const joined = path.join(tmp, 'joined' + (map ? '.mp4' : '.ts'));
+    const parts = map ? [new URL(map[1], f.url).toString(), ...pick.map(x => x.uri)] : pick.map(x => x.uri);
+    for (let i = 0; i < parts.length; i++) {
+      if (job.cancelled) throw new Error(L('Отменено', 'Cancelled'));
+      const piece = path.join(tmp, `p${i}`);
+      await fetchFile(parts[i], piece, job);
+      fs.appendFileSync(joined, fs.readFileSync(piece));
+      fs.rmSync(piece, { force: true });
+      linkProgress(jobId, (i + 1) / parts.length * 0.95, 'download');
+    }
+    const clock = t => new Date(t * 1000).toISOString().slice(11, 19).replace(/:/g, '-');
+    const name = `${(f.title || 'video').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80).trim()} [${f.id || ''}] ${clock(from)}–${clock(end)}.mp4`;
+    const out = path.join(dir, name);
+    await run(FFMPEG, ['-hide_banner', '-y', '-ss', num(from - pick[0].start), '-i', joined, '-t', num(end - from),
+      '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', out]);
+    linkProgress(jobId, 1, 'download');
+    return out;
+  } finally {
+    jobs.delete(jobId);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// For the editor: the video (or a part of it, from-to in seconds) saved into a folder
+ipcMain.handle('link-download', async (_e, { url, dir, from, to, jobId }) => {
+  const exe = await ytdlpEnsure(jobId);
+  if (isYouTube(url)) await denoEnsure(jobId);
+  if (from != null || to != null) {
+    const f = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]', url], jobId).catch(() => 'null'));
+    // only a stream with its sound in it (Twitch); YouTube's streams are picture or sound alone,
+    // so a part of those is cut by yt-dlp itself
+    if (f && f.url && /m3u8/.test(f.protocol || '') && !f.is_live && f.acodec !== 'none' && f.vcodec !== 'none') {
+      const file = await hlsPart(f, dir, from || 0, to, jobId);
+      if (file) return { file };
+    }
+  }
+  const args = ['--no-playlist', '--newline', '--no-warnings', '--no-part',
+    '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4',
+    '--ffmpeg-location', FFMPEG, '-P', dir, '-o', '%(title).90B [%(id)s].%(ext)s',
+    '--windows-filenames', '--print', 'after_move:filepath'];
+  const part = from != null || to != null;
+  if (part) args.push('--download-sections', `*${from || 0}-${to != null ? to : 'inf'}`);
+  args.push(url);
+  const span = part && to != null ? to - (from || 0) : 0;
+  let file = '';
+  await ytdlp(exe, args, jobId, line => {
+    // "[download]  42.0% of 120.00MiB …", or ffmpeg's "time=00:01:02.50" when a part is cut out
+    const pc = /\[download\]\s+([\d.]+)%/.exec(line);
+    if (pc) linkProgress(jobId, Number(pc[1]) / 100, 'download');
+    const tm = /time=(\d+):(\d+):([\d.]+)/.exec(line);
+    if (tm && span > 0) linkProgress(jobId, Math.min(1, (tm[1] * 3600 + tm[2] * 60 + Number(tm[3])) / span), 'download');
+    if (/^[A-Za-z]:\\/.test(line.trim())) file = line.trim();
+  });
+  if (!file || !fs.existsSync(file)) throw new Error(L('yt-dlp не сообщил, куда сохранил файл', 'yt-dlp did not say where it saved the file'));
+  return { file };
+});
+
+ipcMain.handle('link-pick-dir', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+});
 
 ipcMain.handle('asr-info', (_e, dir) => {
   const d = dir || defaultModelsDir();

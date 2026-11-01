@@ -3,6 +3,19 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.4',
+    date: '2026-11-01',
+    sections: [
+      [['Видео по ссылке', 'Videos by link'], [
+        ['YouTube, Twitch, VK Видео, Kick и другие сайты: вставьте ссылку в плеер (Ctrl+V), кнопка «Ссылка» на главном экране или Ctrl+U', 'YouTube, Twitch, VK Video, Kick and other sites: paste a link into the player (Ctrl+V), the “Link” button on the start screen or Ctrl+U'],
+        ['Прямые эфиры — с пометкой «В эфире», записи можно перематывать', 'Live streams show “Live”, recordings can be sought'],
+      ]],
+      [['Видеоредактор', 'Video editor'], [
+        ['Выделенные клипы тянутся все вместе, даже после отвязки звука от картинки', 'Selected clips are dragged all together, also after unlinking sound from picture'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0-beta.3',
     date: '2026-11-01',
     sections: [

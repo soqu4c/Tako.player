@@ -443,12 +443,20 @@ function stripAudioOnly(text) {
   }
   return out.join('\n');
 }
+// YouTube adds machine dubbing ("English - dubbed-auto") next to the real sound and marks none
+// as the default, so the first one played. The one named "original" is made the default.
+function preferOriginalAudio(text) {
+  const audio = /^#EXT-X-MEDIA:.*TYPE=AUDIO/;
+  const lines = text.split('\n');
+  if (!lines.some(l => audio.test(l) && /NAME="[^"]*original/i.test(l))) return text;
+  return lines.map(l => (audio.test(l) ? l.replace(/DEFAULT=(YES|NO)/, /NAME="[^"]*original/i.test(l) ? 'DEFAULT=YES' : 'DEFAULT=NO') : l)).join('\n');
+}
 const NoAdsLoader = window.Hls ? class extends Hls.DefaultConfig.loader {
   load(context, config, callbacks) {
     if (context.type === 'manifest' || context.type === 'level') {
       const ok = callbacks.onSuccess;
       callbacks.onSuccess = (response, stats, ctx, details) => {
-        if (typeof response.data === 'string') response.data = stripAds(stripAudioOnly(response.data));
+        if (typeof response.data === 'string') response.data = stripAds(preferOriginalAudio(stripAudioOnly(response.data)));
         ok(response, stats, ctx, details);
       };
     }

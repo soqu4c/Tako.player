@@ -585,3 +585,17 @@ body.ed-resizing, body.ed-resizing * { user-select: none; }
 #ed-ex-presets .btn.mine i { font-style: normal; opacity: .55; padding: 0 2px; }
 #ed-ex-presets .btn.mine i:hover { opacity: 1; color: #ff6b6b; }
 .ed-ex-name { width: 200px; height: 28px; font-size: 12px; text-align: left; padding: 0 8px; }
+
+/* a narrow Project panel: "Link" and "Import" shrink to their icons (the name stays in the tooltip),
+   and the tabs never wrap */
+.ed-bin { container: bin / inline-size; }
+.ed-bin .ed-tabs > span:not(.ed-flex) { white-space: nowrap; }
+.ed-bin .ed-tabs .btn { flex: none; }
+@container bin (max-width: 330px) {
+  .ed-bin .ed-tabs .btn.small { font-size: 0; gap: 0; padding: 5px 7px; }
+  .ed-bin .ed-tabs .btn.small .i { width: 15px; height: 15px; margin: 0; }
+}
+@container bin (max-width: 200px) {
+  .ed-bin .ed-tabs { gap: 6px; padding: 0 6px 0 8px; }
+  .ed-bin .ed-tabs > span:not(.ed-flex) { font-size: 11px; }
+}

@@ -364,19 +364,110 @@ function setSource(file, time, play) {
   const link = state.info && state.info.link;
   if (/^https?:/.test(file) && (/m3u8/.test(file) || (link && link.hls && link.url === file)) && window.Hls && Hls.isSupported()) {
     // a live stream or a site's HLS: hls.js feeds it to the video element
-    state.hls = new Hls({ lowLatencyMode: !!(state.info && state.info.link && state.info.link.live), backBufferLength: 90 });
+    // the first quality is picked for a fair connection (3 Mbit/s), not the slowest, and goes up sooner
+    state.hls = new Hls({ lowLatencyMode: !!(link && link.live), backBufferLength: 90, pLoader: NoAdsLoader,
+      abrEwmaDefaultEstimate: 3e6, abrBandWidthUpFactor: 0.8 });
     state.hls.on(Hls.Events.ERROR, (_e, d) => {
       if (!d.fatal) return;
-      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) state.hls.startLoad();
+      // a playlist that is all ads for now comes out empty: it is simply asked for again
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) setTimeout(() => state.hls && state.hls.startLoad(), 1000);
       else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) state.hls.recoverMediaError();
       else toast('Поток прервался: ' + (d.details || 'ошибка'));
+    });
+    // the qualities of the stream, "Auto" first; the choice is kept for the next links
+    state.hls.on(Hls.Events.MANIFEST_PARSED, (_e, d) => {
+      const q = $('#quality');
+      q.innerHTML = '';
+      q.add(new Option('Авто', -1));
+      d.levels.forEach((l, k) => { if (l.height) q.add(new Option(`${l.height}p${l.frameRate > 40 ? Math.round(l.frameRate) : ''}`, k)); });
+      const want = recall('linkQuality', 'auto');
+      const k = d.levels.findIndex(l => `${l.height}` === String(want));
+      q.value = k >= 0 ? k : -1;
+      if (k >= 0) state.hls.currentLevel = k;
+      q.hidden = d.levels.length < 2;
     });
     state.hls.loadSource(file);
     state.hls.attachMedia(video);
   } else video.src = /^https?:/.test(file) ? file : api.toUrl(file);
 }
 
+// Twitch puts its ads into the stream itself, as pieces titled "Amazon|…" between the "live"
+// ones. Played, they show "Commercial break in progress", and the switch back to the stream
+// (another picture format) often leaves a black screen. As streamlink does, the pieces are
+// left out of every playlist before hls.js sees it; during an ad the stream just waits.
+function stripAds(text) {
+  const lines = text.split('\n');
+  const out = [];
+  let cut = 0;
+  let lead = 0; // ad pieces before the first stream piece
+  let kept = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('#EXTINF') && /,\s*Amazon/i.test(lines[i])) {
+      // the piece's own date line before it goes too, then the address after it
+      if (out.length && out[out.length - 1].startsWith('#EXT-X-PROGRAM-DATE-TIME')) out.pop();
+      while (i + 1 < lines.length && lines[i + 1].startsWith('#') && !lines[i + 1].startsWith('#EXTINF')) i++;
+      i++;
+      cut++;
+      if (!kept) lead++;
+      continue;
+    }
+    if (lines[i].startsWith('#EXTINF')) kept++;
+    out.push(lines[i]);
+  }
+  adBreak(cut > 0 && !kept);
+  if (!cut) return text;
+  // hls.js numbers pieces from the playlist's first one; the ones left keep their own numbers
+  const seq = out.findIndex(l => l.startsWith('#EXT-X-MEDIA-SEQUENCE:'));
+  if (seq >= 0 && lead) out[seq] = '#EXT-X-MEDIA-SEQUENCE:' + (Number(out[seq].split(':')[1]) + lead);
+  return out.join('\n');
+}
+// The note stays up while the ad lasts (the playlist comes again every couple of seconds)
+let adShown = false;
+function adBreak(on) {
+  if (on) osd('Реклама Twitch пропускается — эфир начнётся через несколько секунд');
+  else if (adShown) osd('Эфир');
+  adShown = on;
+}
+// The list of qualities without "audio only": on a slow connection hls.js would pick it and
+// leave the picture black
+function stripAudioOnly(text) {
+  if (!text.includes('#EXT-X-STREAM-INF')) return text;
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('#EXT-X-STREAM-INF') && (/audio_only/i.test(lines[i + 1] || '') || /CODECS="mp4a[^",]*"/.test(lines[i]))) {
+      i++;
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  return out.join('\n');
+}
+const NoAdsLoader = window.Hls ? class extends Hls.DefaultConfig.loader {
+  load(context, config, callbacks) {
+    if (context.type === 'manifest' || context.type === 'level') {
+      const ok = callbacks.onSuccess;
+      callbacks.onSuccess = (response, stats, ctx, details) => {
+        if (typeof response.data === 'string') response.data = stripAds(stripAudioOnly(response.data));
+        ok(response, stats, ctx, details);
+      };
+    }
+    super.load(context, config, callbacks);
+  }
+} : null;
+
+$('#quality').addEventListener('change', e => {
+  const k = Number(e.target.value);
+  e.target.blur();
+  if (!state.hls) return;
+  state.hls.currentLevel = k; // -1 is Auto
+  store('linkQuality', k >= 0 ? String(state.hls.levels[k].height) : 'auto');
+  osd(k >= 0 ? `Качество ${state.hls.levels[k].height}p` : 'Качество: авто');
+});
+
 function dropHls() {
+  adShown = false;
+  $('#quality').hidden = true;
   if (!state.hls) return;
   state.hls.destroy();
   state.hls = null;

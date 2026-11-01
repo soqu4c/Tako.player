@@ -1404,3 +1404,4 @@ body.link-live #time { color: #ff4d4d; font-weight: 700; }
 #upd-note .btn.small { padding: 5px 14px; }
 #upd-close { color: var(--muted); }
 body.no-motion #upd-note.in { animation: none; }
+#quality[hidden] { display: none; }

@@ -910,14 +910,16 @@ ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
   const exe = await ytdlpEnsure(jobId);
   linkProgress(jobId, 1, 'resolve');
   const j = JSON.parse(await ytdlp(exe, ['-J', '--no-playlist', '--no-warnings', '-f', PLAY_FORMAT, url], jobId));
+  const hls = /m3u8/.test(j.protocol || '') || /\.m3u8/.test(j.url || '');
   return {
     title: j.title || j.fulltitle || url,
     channel: j.uploader || j.channel || '',
     site: j.extractor_key || '',
     live: !!j.is_live,
     duration: j.is_live ? 0 : j.duration || 0,
-    url: j.url,
-    hls: /m3u8/.test(j.protocol || '') || /\.m3u8/.test(j.url || ''),
+    // for HLS the list of all qualities, so the player picks one the connection can carry
+    url: (hls && j.manifest_url) || j.url,
+    hls,
     width: j.width || 0,
     height: j.height || 0,
     page: j.webpage_url || url,

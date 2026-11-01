@@ -1390,3 +1390,17 @@ body.link .pick:has(#audio-select), body.link #btn-names, body.link #btn-mixlist
 body.link #btn-markers, body.link #btn-trim, body.link #btn-draw, body.link #btn-shot { display: none; }
 body.link-live #timeline { visibility: hidden; }
 body.link-live #time { color: #ff4d4d; font-weight: 700; }
+/* ---------- a new version: a small notice at the top in the middle */
+#upd-note { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 14px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--line-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45); font-size: 13px; color: var(--text); white-space: nowrap; }
+#upd-note[hidden] { display: none; }
+#upd-note.in { animation: upd-in .35s var(--ease); }
+@keyframes upd-in { from { opacity: 0; transform: translate(-50%, -14px); } }
+#upd-note > .i { width: 16px; height: 16px; color: var(--accent); }
+#upd-bar { width: 90px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+#upd-bar[hidden] { display: none; }
+#upd-bar i { display: block; height: 100%; background: var(--grad); transition: width .3s; }
+#upd-note .btn.small { padding: 5px 14px; }
+#upd-close { color: var(--muted); }
+body.no-motion #upd-note.in { animation: none; }

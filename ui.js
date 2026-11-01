@@ -2447,11 +2447,39 @@ function renderSplashUpdate() {
   $('#splash-skip').hidden = !downloading;
 }
 
+// The notice at the top: while a new version downloads, then with "Update" once it is ready.
+// Closed, it stays away for that version; the small button in the title bar is left.
+let updNoteClosed = null;
+function renderUpdateNote() {
+  const note = $('#upd-note');
+  const splashUp = document.querySelector('#splash') && !$('#splash').classList.contains('out');
+  const busy = upd.status === 'downloading' || upd.status === 'ready';
+  const show = busy && !splashUp && updNoteClosed !== upd.version;
+  if (show && note.hidden) {
+    note.hidden = false;
+    note.classList.remove('in');
+    void note.offsetWidth;
+    note.classList.add('in');
+  } else if (!show) note.hidden = true;
+  if (!show) return;
+  const ready = upd.status === 'ready';
+  $('#upd-text').textContent = ready ? `Готова новая версия ${upd.version}` : `Скачивается обновление ${upd.version || ''} — ${upd.percent || 0}%`;
+  $('#upd-bar').hidden = ready;
+  $('#upd-bar i').style.width = (upd.percent || 0) + '%';
+  $('#upd-go').hidden = !ready;
+}
+$('#upd-go').onclick = () => api.updateInstall();
+$('#upd-close').onclick = () => {
+  updNoteClosed = upd.version;
+  renderUpdate({});
+};
+
 function renderUpdate(s) {
   upd = { ...upd, ...s };
   renderSplashUpdate();
+  renderUpdateNote();
   const btn = $('#update-btn');
-  btn.hidden = upd.status !== 'ready';
+  btn.hidden = upd.status !== 'ready' || updNoteClosed !== upd.version;
   btn.querySelector('span').textContent = `Обновить до ${upd.version}`;
   const text = document.querySelector('#about-update-text');
   if (!text) return;

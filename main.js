@@ -1008,7 +1008,10 @@ async function ytdlp(exe, args, jobId, onLine) {
 
 // For watching: one address the page can open by itself. Streams and most sites give HLS
 // (played through hls.js); otherwise a single file with picture and sound together.
-const PLAY_FORMAT = 'best[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]/best[vcodec!=none][acodec!=none][ext=mp4]/best[vcodec!=none][acodec!=none]/best';
+// YouTube keeps picture and sound apart (no file has both), but its HLS list carries both, so
+// a picture-only HLS stream is taken too: the player then plays that whole list.
+const PLAY_FORMAT = 'best[protocol^=m3u8][height<=1080]/bv*[protocol^=m3u8][height<=1080]/best[protocol^=m3u8]/bv*[protocol^=m3u8]/'
+  + 'best[vcodec!=none][acodec!=none][ext=mp4]/best[vcodec!=none][acodec!=none]/best';
 
 ipcMain.handle('link-resolve', async (_e, { url, jobId }) => {
   const exe = await ytdlpEnsure(jobId);

@@ -3,6 +3,19 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.0-beta.6',
+    date: '2026-11-02',
+    sections: [
+      [['Меньше памяти', 'Less memory'], [
+        ['Редактор отпускает видео и звук предпросмотра, когда выходишь из него — память возвращается', 'The editor releases the preview video and audio when you leave it — the memory comes back'],
+        ['Кадры на таймлайне больше не копятся без конца за долгую работу', 'Timeline thumbnails no longer pile up endlessly over a long session'],
+      ]],
+      [['Безопасные обновления', 'Safe updates'], [
+        ['Каждое обновление подписано ключом автора; плеер не поставит подделанный файл, даже если подменят GitHub', 'Every update is signed with the author’s key; the player will not install a tampered file, even if GitHub is compromised'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0-beta.5',
     date: '2026-11-01',
     sections: [

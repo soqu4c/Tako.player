@@ -231,11 +231,50 @@ function applyChannel() {
   updater.allowDowngrade = updateChannel === 'stable' && app.getVersion().includes('-');
 }
 
+// Signed updates. Every release is signed on the author's own machine with a private key that
+// lives nowhere else; the matching public key is baked in here. Before an update installs, its
+// signature is checked, so a tampered or forged installer (even one served from a hacked
+// GitHub) is refused. Signing: node sign-update.js <installer.exe> at release time.
+const UPDATE_PUBKEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA9hT7VwF9+lTqEso4YmAA6tg+PnrIIi/sdFwBwWMK7Bk=
+-----END PUBLIC KEY-----`;
+
+function httpsText(url, hops = 0) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': `Tako.player/${app.getVersion()}` } }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 8) {
+        res.resume();
+        return resolve(httpsText(new URL(res.headers.location, url).toString(), hops + 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      let s = '';
+      res.setEncoding('utf8');
+      res.on('data', d => { s += d; });
+      res.on('end', () => resolve(s));
+    }).on('error', reject);
+  });
+}
+
+// Throws unless the downloaded installer's hash is signed by the author's key
+async function verifyUpdate(info) {
+  const file = info.downloadedFile;
+  if (!file || !fs.existsSync(file)) throw new Error('файл обновления не найден');
+  const name = (info.files && info.files[0] && info.files[0].url) || `Tako.player-Setup-${info.version}.exe`;
+  const sigUrl = `${PROJECT_URL}/releases/download/v${info.version}/${name.split('/').pop()}.sig`;
+  const sig = Buffer.from((await httpsText(sigUrl)).trim(), 'base64');
+  const sha = crypto.createHash('sha512').update(fs.readFileSync(file)).digest('base64');
+  if (!crypto.verify(null, Buffer.from(sha), UPDATE_PUBKEY, sig)) throw new Error('подпись не совпала');
+}
+
 function setupUpdates(openedFiles) {
   if (!app.isPackaged) return releaseStartup();
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
-  updater.autoInstallOnAppQuit = true;
+  // stays off until an update passes the signature check, so an unverified file never installs
+  updater.autoInstallOnAppQuit = false;
   applyChannel();
   updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
   updater.on('update-not-available', () => {
@@ -244,7 +283,16 @@ function setupUpdates(openedFiles) {
   });
   updater.on('update-available', i => sendUpdate({ status: 'downloading', version: i.version, percent: 0 }));
   updater.on('download-progress', p => sendUpdate({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
-  updater.on('update-downloaded', i => {
+  updater.on('update-downloaded', async i => {
+    try {
+      await verifyUpdate(i);
+    } catch (e) {
+      // a bad or unsigned file is left in place but never installed
+      sendUpdate({ status: 'error', message: L('Обновление не прошло проверку подписи и не установлено', 'The update failed the signature check and was not installed') + ': ' + (e.message || e) });
+      if (blocking) releaseStartup();
+      return;
+    }
+    updater.autoInstallOnAppQuit = true; // verified: safe to install on quit
     sendUpdate({ status: 'ready', version: i.version });
     if (blocking) {
       savePendingOpen(openedFiles);

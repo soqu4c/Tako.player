@@ -217,7 +217,7 @@ function binThumb(m) {
     edThumbs.set(key, '');
     (m.image ? Promise.resolve(api.toUrl(m.path)) : api.frameThumb({ file: m.path, time: Math.min(1, m.dur / 10) }))
       .then(url => {
-        edThumbs.set(key, url || 'none');
+        rememberThumb(key, url || 'none');
         for (const el of document.querySelectorAll('#ed-bin-list .ed-item > i > img')) if (el.dataset.key === key && url) el.src = url;
       }, () => edThumbs.set(key, 'none'));
   }
@@ -832,6 +832,17 @@ const edThumbs = new Map(); // "path|time" -> data URL, or '' while loading
 const thumbQueue = [];
 let thumbBusy = 0;
 const THUMB_W = 56;
+const THUMB_MAX = 400; // a long timeline makes new frames endlessly; keep only the recent ones
+// Map keeps insertion order, so the oldest entries are at the front
+function rememberThumb(key, url) {
+  edThumbs.delete(key); // re-add so a shown frame counts as recent
+  edThumbs.set(key, url);
+  while (edThumbs.size > THUMB_MAX) {
+    const old = edThumbs.keys().next().value;
+    if (old === key) break;
+    edThumbs.delete(old);
+  }
+}
 
 function pumpThumbs() {
   while (thumbBusy < 2 && thumbQueue.length) {
@@ -839,7 +850,7 @@ function pumpThumbs() {
     thumbBusy++;
     const done = url => {
       thumbBusy--;
-      edThumbs.set(key, url || 'none');
+      rememberThumb(key, url || 'none');
       for (const img of document.querySelectorAll('img.ed-thumb')) if (img.dataset.key === key && url) img.src = url;
       pumpThumbs();
     };
@@ -2580,14 +2591,35 @@ api.onProgress(({ jobId, value }) => {
 
 // ---------- entering and leaving the editor
 
+// Leaving the editor, let go of the preview media: a source video is often huge, and five
+// media elements holding it is most of the editor's memory. Coming back, syncPreview loads
+// what the playhead needs again.
+function releaseEditorMedia() {
+  edPause();
+  for (const el of [...Object.values(edV), ...Object.values(edTail)]) {
+    el.pause();
+    el.removeAttribute('src');
+    delete el.dataset.src;
+    el.load();
+  }
+  for (const [, el] of edAudio) {
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+  }
+  edAudio.clear();
+  $('#ed-screen').querySelectorAll('img[data-layer]').forEach(i => i.remove());
+}
+
 const showViewBeforeEditor = showView;
 showView = v => {
   if (v === 'editor' && !video.paused) video.pause();
-  if (v !== 'editor' && ed.playing) edPause();
+  if (v !== 'editor' && currentView === 'editor') releaseEditorMedia();
   showViewBeforeEditor(v);
   if (v === 'editor') {
     fitScreen();
     renderTimeline();
+    syncPreview(true);
     if (!recall('edTourDone', false)) setTimeout(edTour, 400);
   }
 };

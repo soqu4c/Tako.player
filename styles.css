@@ -302,7 +302,7 @@ option, optgroup { background: #171922; color: var(--text); }
   animation: glow 6s ease-in-out infinite;
 }
 @keyframes glow { 50% { opacity: .55; transform: translateX(-50%) scale(1.1); } }
-#empty > *:not(.empty-glow):not(.hw-bats):not(.hw-web) { position: relative; }
+#empty > *:not(.empty-glow):not(.hw-bats):not(.hw-web):not(.snow) { position: relative; }
 .empty-logo { width: 104px; height: 104px; margin-bottom: 10px; animation: float 4s ease-in-out infinite; filter: drop-shadow(0 14px 26px rgba(var(--accent-rgb), .35)); }
 @keyframes float { 50% { transform: translateY(-8px) rotate(-3deg); } }
 #empty h1 { margin: 0; font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -.01em; }
@@ -1413,3 +1413,18 @@ body.no-motion #upd-note.in { animation: none; }
 #link-dvr { margin-left: 8px; padding: 3px 10px; font-size: 12px; }
 #link-dvr[hidden] { display: none; }
 .link-hint { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+/* ---------- Winter / New Year: snow on the start screen and splash */
+.wn-only, .snow { display: none; }
+body.winter .wn-only { display: block; }
+body.winter .snow { display: block; position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+body.winter .empty-glow { background: radial-gradient(closest-side, rgba(76, 160, 255, .22), rgba(159, 224, 255, .12) 55%, transparent); }
+.wn-greet { margin: -4px 0 10px; font-size: 15px; font-weight: 600; background: linear-gradient(90deg, #7fc4ff, #d6f0ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.flake { position: absolute; top: -6%; color: #eaf6ff; text-shadow: 0 0 6px rgba(120, 200, 255, .9); line-height: 1; pointer-events: none;
+  animation-name: snow-fall; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes snow-fall {
+  0% { transform: translate(0, -8vh) rotate(0deg); }
+  100% { transform: translate(var(--drift, 20px), 112vh) rotate(360deg); }
+}
+body.no-motion .flake { display: none; }
+#splash .snow .flake { color: #dcefff; }

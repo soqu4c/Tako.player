@@ -29,12 +29,10 @@ const ACCENTS = {
 const SUB_SIZES = { s: '1em', m: '1.25em', l: '1.55em', xl: '1.9em' };
 const SUB_BGS = { none: 'transparent', soft: 'rgba(0, 0, 0, .45)', solid: 'rgba(0, 0, 0, .85)' };
 const DEFAULTS = {
-  halloween: true,
-  winter: true,
-  resume: true, autoplay: true, autoNext: true, seekStep: 5,
+  resume: true, autoplay: true, autoNext: true, seekStep: 5, winOpacity: 1,
   accent: 'salsa', preview: true, hideDelay: 2.5, motion: true, splash: true,
   subSize: 'm', subColor: '#ffffff', subBg: 'soft', obsNames: true,
-  discord: true, discordName: false,
+  discordName: false,
   asrDir: '', // folder for the speech recognizer and its model; empty = default (E:\Tako.player\models)
 };
 const settings = { ...DEFAULTS, ...recall('settings', {}) };
@@ -73,11 +71,12 @@ function makeSnow() {
 
 function applySettings() {
   const root = document.documentElement.style;
-  const halloween = settings.halloween !== false && isHalloween();
-  const winter = settings.winter !== false && isWinter();
+  const halloween = isHalloween();
+  const winter = isWinter();
   document.body.classList.toggle('halloween', halloween);
   document.body.classList.toggle('winter', winter);
   if (winter) makeSnow();
+  api.setOpacity(settings.winOpacity != null ? settings.winOpacity : 1);
   const [a, b] = winter ? WINTER : halloween ? HALLOWEEN : ACCENTS[settings.accent] || ACCENTS.salsa;
   root.setProperty('--accent', a);
   root.setProperty('--accent-2', b);
@@ -135,12 +134,10 @@ const SETTING_TABS = [
     id: 'ui', title: 'Интерфейс', icon: 'i-screen', rows: [
       { key: 'lang', type: 'segment', label: 'Язык интерфейса / Language', options: [['ru', 'Русский'], ['en', 'English']] },
       { key: 'accent', type: 'accent', label: 'Цвет акцента' },
-      { key: 'halloween', type: 'toggle', label: 'Оформление к Хеллоуину', hint: 'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента' },
-      { key: 'winter', type: 'toggle', label: 'Новогоднее оформление', hint: 'С 25 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента' },
+      { key: 'winOpacity', type: 'range', label: 'Прозрачность окна', hint: 'Окно становится полупрозрачным — видно, что за ним. 100% — обычное непрозрачное', min: 0.5, max: 1, step: 0.02, pct: true },
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },
-      { key: 'discord', type: 'toggle', label: 'Статус в Discord', hint: '«Смотрит Tako.player» и название папки — например, игры из OBS. Работает, когда Discord запущен' },
       { key: 'discordName', type: 'toggle', label: 'Показывать в статусе название файла', hint: 'Иначе видно только название папки' },
       { key: 'splash', type: 'toggle', label: 'Заставка при запуске', hint: 'Короткая заставка с логотипом, когда плеер открывается' },
     ],
@@ -199,6 +196,23 @@ function settingControl(row) {
       seg.append(b);
     }
     return seg;
+  }
+  if (row.type === 'range') {
+    const wrap = document.createElement('div');
+    wrap.className = 'range-row';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = row.min;
+    input.max = row.max;
+    input.step = row.step;
+    input.value = settings[row.key] != null ? settings[row.key] : row.max;
+    const out = document.createElement('span');
+    out.className = 'range-val';
+    const show = v => (row.pct ? Math.round(v * 100) + '%' : v + (row.unit || ''));
+    out.textContent = show(input.value);
+    input.oninput = () => { out.textContent = show(input.value); setSetting(row.key, Number(input.value)); };
+    wrap.append(input, out);
+    return wrap;
   }
   if (row.type === 'accent' || row.type === 'colors') {
     const box = document.createElement('div');
@@ -2397,7 +2411,7 @@ function discordActivity() {
 }
 
 function updateDiscord() {
-  api.discordActivity({ enabled: settings.discord, activity: settings.discord ? discordActivity() : null });
+  api.discordActivity({ enabled: true, activity: discordActivity() });
 }
 
 for (const ev of ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata', 'emptied']) video.addEventListener(ev, updateDiscord);

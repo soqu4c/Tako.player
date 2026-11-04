@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   clearThumbs: () => ipcRenderer.invoke('clear-thumbs'),
   appInfo: () => ipcRenderer.invoke('app-info'),
   setLang: lang => ipcRenderer.send('set-lang', lang),
+  setOpacity: v => ipcRenderer.invoke('set-opacity', v),
   startDrag: file => ipcRenderer.send('start-drag', file),
   winMini: opts => ipcRenderer.invoke('win-mini', opts),
   obsTracks: () => ipcRenderer.invoke('obs-tracks'),

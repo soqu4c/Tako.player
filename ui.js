@@ -30,6 +30,7 @@ const SUB_SIZES = { s: '1em', m: '1.25em', l: '1.55em', xl: '1.9em' };
 const SUB_BGS = { none: 'transparent', soft: 'rgba(0, 0, 0, .45)', solid: 'rgba(0, 0, 0, .85)' };
 const DEFAULTS = {
   halloween: true,
+  winter: true,
   resume: true, autoplay: true, autoNext: true, seekStep: 5,
   accent: 'salsa', preview: true, hideDelay: 2.5, motion: true, splash: true,
   subSize: 'm', subColor: '#ffffff', subBg: 'soft', obsNames: true,
@@ -47,12 +48,37 @@ function hexRgb(hex) {
 // Halloween dress: from Oct 24 to Nov 2 every year, unless switched off in the settings
 const isHalloween = (d = new Date()) => (d.getMonth() === 9 && d.getDate() >= 24) || (d.getMonth() === 10 && d.getDate() <= 2);
 const HALLOWEEN = ['#ff7a18', '#a35cff'];
+// Winter dress: Dec 15 to Jan 10 every year, unless switched off in the settings
+const isWinter = (d = new Date()) => (d.getMonth() === 11 && d.getDate() >= 15) || (d.getMonth() === 0 && d.getDate() <= 10);
+const WINTER = ['#4ca0ff', '#9fe0ff'];
+
+// Fills every .snow box with drifting flakes (CSS hides them unless body.winter)
+function makeSnow() {
+  for (const box of document.querySelectorAll('.snow')) {
+    if (box.childElementCount) continue;
+    for (let i = 0; i < 16; i++) {
+      const fl = document.createElement('span');
+      fl.className = 'flake';
+      fl.textContent = i % 3 ? '❄' : '❅';
+      fl.style.left = (Math.random() * 100).toFixed(2) + '%';
+      fl.style.fontSize = (8 + Math.random() * 18).toFixed(1) + 'px';
+      fl.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+      fl.style.animationDuration = (6 + Math.random() * 10).toFixed(1) + 's';
+      fl.style.animationDelay = (-Math.random() * 12).toFixed(1) + 's';
+      fl.style.setProperty('--drift', (Math.random() * 80 - 40).toFixed(0) + 'px');
+      box.append(fl);
+    }
+  }
+}
 
 function applySettings() {
   const root = document.documentElement.style;
   const halloween = settings.halloween !== false && isHalloween();
+  const winter = settings.winter !== false && isWinter();
   document.body.classList.toggle('halloween', halloween);
-  const [a, b] = halloween ? HALLOWEEN : ACCENTS[settings.accent] || ACCENTS.salsa;
+  document.body.classList.toggle('winter', winter);
+  if (winter) makeSnow();
+  const [a, b] = winter ? WINTER : halloween ? HALLOWEEN : ACCENTS[settings.accent] || ACCENTS.salsa;
   root.setProperty('--accent', a);
   root.setProperty('--accent-2', b);
   root.setProperty('--accent-rgb', hexRgb(a));
@@ -110,6 +136,7 @@ const SETTING_TABS = [
       { key: 'lang', type: 'segment', label: 'Язык интерфейса / Language', options: [['ru', 'Русский'], ['en', 'English']] },
       { key: 'accent', type: 'accent', label: 'Цвет акцента' },
       { key: 'halloween', type: 'toggle', label: 'Оформление к Хеллоуину', hint: 'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента' },
+      { key: 'winter', type: 'toggle', label: 'Новогоднее оформление', hint: 'С 15 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента' },
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },

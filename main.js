@@ -153,7 +153,7 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   fs.mkdirSync(CACHE, { recursive: true });
   createWindow();
-  setupUpdates(argPaths(process.argv));
+  setupUpdates();
 });
 
 // Files the player was started with survive the restart that installs an update
@@ -179,29 +179,23 @@ function takePendingOpen() {
 
 // ---------- updates from GitHub Releases
 //
-// Every start waits on the splash for the check: a new version is downloaded and installed
-// before the player opens (files it was started with reopen after the restart). After "skip"
-// or a slow network the update downloads in the background and installs by itself on quit,
-// or right away from the title bar button. Runs from source never update.
+// The player opens right away; the check runs in the background and a found update downloads
+// and shows as a notice at the top of the window, installing on quit or at once from its
+// "Обновить" button. Every update's signature is verified first. Runs from source never update.
 
 let updater = null;
 let updateState = { status: 'idle' };
 let releaseGate;
 const startupGate = new Promise(r => { releaseGate = r; });
-let blocking = false; // the splash is waiting for the update
-
 function sendUpdate(state) {
   updateState = state;
   if (win) win.webContents.send('update', state);
 }
 
-// Lets the player open; a download still in progress carries on in the background
+// Lets the player open (called at once now; the splash never waits for the update check)
 function releaseStartup() {
-  blocking = false;
   releaseGate();
 }
-
-const STARTUP_CHECK_MS = 6000;
 
 // Which builds to take: 'stable', or 'beta' (pre-releases with the video editor, ahead of the
 // main version). Going back to stable installs the newest main version even though its number
@@ -259,18 +253,16 @@ async function verifyUpdate(info) {
   if (!crypto.verify(null, Buffer.from(sha), UPDATE_PUBKEY, sig)) throw new Error('подпись не совпала');
 }
 
-function setupUpdates(openedFiles) {
-  if (!app.isPackaged) return releaseStartup();
+function setupUpdates() {
+  releaseStartup(); // open the player straight away; a new version shows as a notice up top
+  if (!app.isPackaged) return; // runs from source never update
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.autoDownload = true;
   // stays off until an update passes the signature check, so an unverified file never installs
   updater.autoInstallOnAppQuit = false;
   applyChannel();
   updater.on('checking-for-update', () => sendUpdate({ status: 'checking' }));
-  updater.on('update-not-available', () => {
-    sendUpdate({ status: 'latest' });
-    if (blocking) releaseStartup();
-  });
+  updater.on('update-not-available', () => sendUpdate({ status: 'latest' }));
   updater.on('update-available', i => sendUpdate({ status: 'downloading', version: i.version, percent: 0 }));
   updater.on('download-progress', p => sendUpdate({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent) }));
   updater.on('update-downloaded', async i => {
@@ -279,31 +271,17 @@ function setupUpdates(openedFiles) {
     } catch (e) {
       // a bad or unsigned file is left in place but never installed
       sendUpdate({ status: 'error', message: L('Обновление не прошло проверку подписи и не установлено', 'The update failed the signature check and was not installed') + ': ' + (e.message || e) });
-      if (blocking) releaseStartup();
       return;
     }
     updater.autoInstallOnAppQuit = true; // verified: safe to install on quit
     sendUpdate({ status: 'ready', version: i.version });
-    if (blocking) {
-      savePendingOpen(openedFiles);
-      updater.quitAndInstall(true, true);
-    }
   });
-  updater.on('error', e => {
-    sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] });
-    if (blocking) releaseStartup();
-  });
-
-  blocking = true;
-  // No answer in time (slow or no network): open the player; a found update keeps downloading
-  setTimeout(() => {
-    if (blocking && updateState.status !== 'downloading') releaseStartup();
-  }, STARTUP_CHECK_MS);
-  updater.checkForUpdates().catch(() => { if (blocking) releaseStartup(); });
+  updater.on('error', e => sendUpdate({ status: 'error', message: String(e && e.message || e).split('\n')[0] }));
+  updater.checkForUpdates().catch(() => {});
 }
 
 ipcMain.handle('startup-gate', () => startupGate);
-ipcMain.handle('startup-skip', () => { if (blocking) releaseStartup(); });
+ipcMain.handle('startup-skip', () => releaseStartup());
 
 ipcMain.handle('update-state', () => ({ ...updateState, current: app.getVersion(), enabled: !!updater, channel: updateChannel }));
 ipcMain.handle('update-channel', (_e, channel) => {

@@ -451,7 +451,7 @@ const I18N_EN = {
   'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента': 'From October 24 to November 2: bats, cobwebs and pumpkin colors instead of the accent color',
   'Двойной клик — 100%': 'Double click — 100%',
   'Основная': 'Main',
-  'Бета (видеоредактор)': 'Beta (video editor)',
+  'Бета': 'Beta',
   'Бета получает новое раньше, но может работать с ошибками': 'The beta gets new things first but may have bugs',
   'Перезапустить и обновить': 'Restart and update',
   'У вас последняя версия': 'You have the latest version',

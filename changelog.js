@@ -3,93 +3,29 @@
 
 const CHANGELOG = [
   {
-    version: '1.4.0-beta.6',
-    date: '2026-11-02',
+    version: '1.4.0',
+    date: '2026-11-04',
     sections: [
-      [['Меньше памяти', 'Less memory'], [
-        ['Редактор отпускает видео и звук предпросмотра, когда выходишь из него — память возвращается', 'The editor releases the preview video and audio when you leave it — the memory comes back'],
-        ['Кадры на таймлайне больше не копятся без конца за долгую работу', 'Timeline thumbnails no longer pile up endlessly over a long session'],
-      ]],
-      [['Безопасные обновления', 'Safe updates'], [
-        ['Каждое обновление подписано ключом автора; плеер не поставит подделанный файл, даже если подменят GitHub', 'Every update is signed with the author’s key; the player will not install a tampered file, even if GitHub is compromised'],
-      ]],
-    ],
-  },
-  {
-    version: '1.4.0-beta.5',
-    date: '2026-11-01',
-    sections: [
-      [['Эфиры', 'Live streams'], [
-        ['Twitch и Kick: «⏮ С начала эфира» — весь идущий стрим можно мотать назад, «● В эфир» возвращает', 'Twitch and Kick: “⏮ From the start” lets you seek back through the whole running stream, “● Go live” returns'],
-        ['Реклама Twitch пропускается — без «Commercial break» и чёрного экрана после неё', 'Twitch ads are skipped — no “Commercial break” and no black screen after it'],
-        ['Выбор качества (Авто, 1080p, 720p…), плеер сам подстраивается под скорость интернета', 'Quality choice (Auto, 1080p, 720p…), the player adapts to the connection speed'],
-        ['YouTube: обход блокировки DNS, оригинальная озвучка вместо автоматической английской', 'YouTube: works around DNS blocking, plays the original sound instead of auto-dubbing'],
-        ['Ссылки можно вставлять без https:// (kick.com/канал)', 'Links work without https:// (kick.com/name)'],
-      ]],
       [['Видеоредактор', 'Video editor'], [
-        ['Кнопка «Ссылка»: видео или кусок эфира скачивается и сразу встаёт на таймлайн', 'The “Link” button: a video or a part of a stream is downloaded and put straight onto the timeline'],
-        ['В узкой панели «Проект» кнопки становятся значками и не обрезаются', 'In a narrow Project panel the buttons turn into icons and are not cut off'],
+        ['Кнопка «плёнка» слева: таймлайн с дорожками видео, звука и титров, монитор, панели проекта и эффектов — как в Premiere', 'The film button on the left: a timeline with video, sound and title tracks, a monitor, project and effect panels — like Premiere'],
+        ['Переходы (наплыв, затемнение), скорость клипа, титры со шрифтами, метки, цвета клипов, история всех правок', 'Transitions (cross dissolve, dip to black), clip speed, titles with fonts, markers, clip colors, a full edit history'],
+        ['Экспорт с готовыми настройками: YouTube, Shorts / TikTok, Discord до 10 и 50 МБ, и свои настройки', 'Export with presets: YouTube, Shorts / TikTok, Discord up to 10 and 50 MB, and your own'],
       ]],
-      [['Обновления', 'Updates'], [
-        ['Новая версия показывается плашкой сверху по центру: загрузка, потом «Обновить»', 'A new version shows a small notice at the top: download progress, then “Update”'],
+      [['Фото', 'Photos'], [
+        ['Вкладка «Фото»: галерея картинок из ваших папок', 'A Photos tab: a gallery of images from your folders'],
+        ['Фоторедактор: обрезка, поворот, отражение, сохранение PNG / JPG / GIF, кадры из GIF в PNG', 'A photo editor: crop, rotate, flip, save as PNG / JPG / GIF, pull GIF frames to PNG'],
       ]],
-    ],
-  },
-  {
-    version: '1.4.0-beta.4',
-    date: '2026-11-01',
-    sections: [
       [['Видео по ссылке', 'Videos by link'], [
-        ['YouTube, Twitch, VK Видео, Kick и другие сайты: вставьте ссылку в плеер (Ctrl+V), кнопка «Ссылка» на главном экране или Ctrl+U', 'YouTube, Twitch, VK Video, Kick and other sites: paste a link into the player (Ctrl+V), the “Link” button on the start screen or Ctrl+U'],
-        ['Прямые эфиры — с пометкой «В эфире», записи можно перематывать', 'Live streams show “Live”, recordings can be sought'],
+        ['YouTube, Twitch, Kick и другие сайты прямо в плеере: вставьте ссылку (Ctrl+V) или кнопка «Ссылка»', 'YouTube, Twitch, Kick and other sites right in the player: paste a link (Ctrl+V) or the “Link” button'],
+        ['Прямые эфиры Twitch и Kick можно смотреть с начала; реклама Twitch пропускается; выбор качества', 'Twitch and Kick streams can be watched from the start; Twitch ads are skipped; a quality menu'],
       ]],
-      [['Видеоредактор', 'Video editor'], [
-        ['Выделенные клипы тянутся все вместе, даже после отвязки звука от картинки', 'Selected clips are dragged all together, also after unlinking sound from picture'],
+      [['Оформление и интерфейс', 'Look and interface'], [
+        ['Управление плеера слито с видео (как в YouTube), прозрачность фона под ним настраивается', 'The player controls are merged into the video (YouTube-style), with an adjustable background behind them'],
+        ['Оформления к Хеллоуину и Новому году включаются сами по датам', 'Halloween and New Year looks turn on by date on their own'],
       ]],
-    ],
-  },
-  {
-    version: '1.4.0-beta.3',
-    date: '2026-11-01',
-    sections: [
-      [['Видеоредактор', 'Video editor'], [
-        ['Переходы между клипами: наплыв и затемнение — правый клик по клипу или «Скорость и переход» в эффектах', 'Transitions between clips: cross dissolve and dip to black — right click a clip, or “Speed and transition” in the effects'],
-        ['Скорость клипа от 10% до 1000%, звук без изменения тона', 'Clip speed from 10% to 1000%, sound keeps its pitch'],
-        ['Вкладка «История»: все шаги по названиям, к любому можно вернуться', 'The History tab: every step by name, go back to any of them'],
-        ['Готовые настройки экспорта: YouTube, Shorts / TikTok, Discord до 10 и 50 МБ — и свои, под своим названием', 'Export presets: YouTube, Shorts / TikTok, Discord up to 10 and 50 MB — and your own, under your own name'],
-        ['Короткое обучение при первом открытии (кнопка «?»), «Сообщить об ошибке»', 'A short tour on first opening (the “?” button), “Report a problem”'],
-      ]],
-      [['Плеер', 'Player'], [
-        ['Всё из 1.3.3: оформление к Хеллоуину, «Сообщить об ошибке»', 'Everything from 1.3.3: the Halloween look, “Report a problem”'],
-      ]],
-    ],
-  },
-  {
-    version: '1.4.0-beta.2',
-    date: '2026-11-01',
-    sections: [
-      [['Видеоредактор', 'Video editor'], [
-        ['Бегунок, доведённый до края таймлайна, плавно ведёт таймлайн дальше, а не перескакивает на целый экран', 'The playhead held at an edge of the timeline scrolls it on smoothly instead of jumping a screen at a time'],
-        ['Громкость дорожки: 100% — двойным кликом по числу, частые клики по ползунку её не сбрасывают', 'Track volume: double click the number for 100%; quick clicks on the slider no longer reset it'],
-      ]],
-      [['Плеер', 'Player'], [
-        ['Всё из версии 1.3.2: клики по полоске обрезки, правый клик по громкости — 100%', 'Everything from 1.3.2: clicks on the trim strip, right click on the volume for 100%'],
-      ]],
-    ],
-  },
-  {
-    version: '1.4.0-beta.1',
-    date: '2026-11-01',
-    sections: [
-      [['Видеоредактор (бета)', 'Video editor (beta)'], [
-        ['Кнопка «β» слева: таймлайн с дорожками видео, звука и титров, монитор, панель проекта и эффектов', 'The “β” button on the left: a timeline with video, sound and title tracks, a monitor, project and effect panels'],
-        ['Все звуковые дорожки файла (игра, микрофон, Discord) — отдельно, с волнами и названиями как в OBS', 'All sound tracks of a file (game, mic, Discord) apart, with waveforms and names as in OBS'],
-        ['Громкость, затухания, положение, масштаб, поворот и прозрачность клипа', 'Clip volume, fades, position, scale, rotation and opacity'],
-        ['Титры со шрифтами, метки, цвета клипов, блокировка и выключение дорожек', 'Titles with fonts, markers, clip colors, locking and muting tracks'],
-        ['Экспорт: размер, частота кадров, качество или битрейт, 2 прохода', 'Export: size, frame rate, quality or bitrate, two passes'],
-      ]],
-      [['Плеер', 'Player'], [
-        ['Несколько звуковых дорожек одновременно — кнопка «+» у дорожек или Shift+A', 'Several sound tracks at once — the “+” button by the tracks or Shift+A'],
+      [['Надёжность', 'Reliability'], [
+        ['Обновления подписаны ключом автора — подделанный файл не установится', 'Updates are signed with the author’s key — a tampered file will not install'],
+        ['Видеоредактор отпускает память при выходе из него; плеер открывается сразу, обновление приходит плашкой сверху', 'The editor frees memory when you leave it; the player opens at once, an update shows as a notice at the top'],
       ]],
     ],
   },

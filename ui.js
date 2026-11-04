@@ -164,7 +164,7 @@ const SETTING_TABS = [
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },
       { key: 'discord', type: 'toggle', label: 'Статус в Discord', hint: '«Смотрит Tako.player» и название папки — например, игры из OBS. Работает, когда Discord запущен' },
       { key: 'discordName', type: 'toggle', label: 'Показывать в статусе название файла', hint: 'Иначе видно только название папки' },
-      { key: 'splash', type: 'toggle', label: 'Заставка при запуске', hint: 'Пока проверяются обновления, она всё равно ненадолго видна' },
+      { key: 'splash', type: 'toggle', label: 'Заставка при запуске', hint: 'Короткая заставка с логотипом, когда плеер открывается' },
     ],
   },
   {
@@ -2446,19 +2446,8 @@ function updateText(s) {
   }
 }
 
-// While the splash waits for the startup check it shows what is going on
-function renderSplashUpdate() {
-  if (!document.querySelector('#splash') || $('#splash').classList.contains('out')) return;
-  const downloading = upd.status === 'downloading';
-  $('#splash-status').textContent = {
-    checking: 'Проверяю обновления…',
-    downloading: `Скачиваю обновление ${upd.version}… ${upd.percent || 0}%`,
-    ready: 'Устанавливаю обновление, плеер сейчас перезапустится…',
-  }[upd.status] || '';
-  $('#splash-progress').hidden = !downloading && upd.status !== 'ready';
-  $('#splash-bar').style.width = (upd.status === 'ready' ? 100 : upd.percent || 0) + '%';
-  $('#splash-skip').hidden = !downloading;
-}
+// The splash is now just the logo; updates show as a notice at the top instead
+function renderSplashUpdate() {}
 
 // The notice at the top: while a new version downloads, then with "Update" once it is ready.
 // Closed, it stays away for that version; the small button in the title bar is left.

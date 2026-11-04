@@ -405,7 +405,7 @@ const I18N_EN = {
   '🎃 Счастливого Хеллоуина!': '🎃 Happy Halloween!',
   'Оформление к Хеллоуину': 'Halloween look',
   'Новогоднее оформление': 'New Year look',
-  'С 15 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента': 'From December 15 to January 10: snowflakes and cool blue-white colors instead of the accent color',
+  'С 25 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента': 'From December 25 to January 10: snowflakes and cool blue-white colors instead of the accent color',
   '❄ С Новым годом!': '❄ Happy New Year!',
   'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента': 'From October 24 to November 2: bats, cobwebs and pumpkin colors instead of the accent color',
   'Двойной клик — 100%': 'Double click — 100%',

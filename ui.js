@@ -49,7 +49,7 @@ function hexRgb(hex) {
 const isHalloween = (d = new Date()) => (d.getMonth() === 9 && d.getDate() >= 24) || (d.getMonth() === 10 && d.getDate() <= 2);
 const HALLOWEEN = ['#ff7a18', '#a35cff'];
 // Winter dress: Dec 15 to Jan 10 every year, unless switched off in the settings
-const isWinter = (d = new Date()) => (d.getMonth() === 11 && d.getDate() >= 15) || (d.getMonth() === 0 && d.getDate() <= 10);
+const isWinter = (d = new Date()) => (d.getMonth() === 11 && d.getDate() >= 25) || (d.getMonth() === 0 && d.getDate() <= 10);
 const WINTER = ['#4ca0ff', '#9fe0ff'];
 
 // Fills every .snow box with drifting flakes (CSS hides them unless body.winter)
@@ -136,7 +136,7 @@ const SETTING_TABS = [
       { key: 'lang', type: 'segment', label: 'Язык интерфейса / Language', options: [['ru', 'Русский'], ['en', 'English']] },
       { key: 'accent', type: 'accent', label: 'Цвет акцента' },
       { key: 'halloween', type: 'toggle', label: 'Оформление к Хеллоуину', hint: 'С 24 октября по 2 ноября: летучие мыши, паутина и тыквенные цвета вместо цвета акцента' },
-      { key: 'winter', type: 'toggle', label: 'Новогоднее оформление', hint: 'С 15 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента' },
+      { key: 'winter', type: 'toggle', label: 'Новогоднее оформление', hint: 'С 25 декабря по 10 января: снежинки и холодные бело-голубые цвета вместо цвета акцента' },
       { key: 'preview', type: 'toggle', label: 'Превью кадра над шкалой времени', hint: 'Показывает кадр из видео при наведении на шкалу' },
       { key: 'hideDelay', type: 'segment', label: 'Прятать панель управления', hint: 'Во время просмотра, если мышь не двигается', options: [[1.5, '1,5 с'], [2.5, '2,5 с'], [4, '4 с'], [0, 'Никогда']] },
       { key: 'motion', type: 'toggle', label: 'Анимации интерфейса' },

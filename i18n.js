@@ -350,6 +350,8 @@ const I18N_EN = {
   'Во время просмотра, если мышь не двигается': 'While watching, when the mouse does not move',
   'Никогда': 'Never',
   'Анимации интерфейса': 'Interface animations',
+  'Прозрачность окна': 'Window transparency',
+  'Окно становится полупрозрачным — видно, что за ним. 100% — обычное непрозрачное': 'The window becomes translucent — you can see what is behind it; 100% is fully opaque',
   'Заставка при запуске': 'Splash screen at start',
   'Пока проверяются обновления, она всё равно ненадолго видна': 'It still shows briefly while updates are checked',
   'Статус в Discord': 'Discord status',

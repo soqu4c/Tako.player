@@ -503,13 +503,13 @@ body.idle #osd { top: 20px; }
 #timeline { position: relative; height: 22px; cursor: pointer; touch-action: none; margin: 0 4px; }
 #timeline .rail {
   position: absolute;
-  left: 0; right: 0; top: 9px;
-  height: 4px;
+  left: 0; right: 0; top: 8px;
+  height: 6px;
   background: rgba(255, 255, 255, .12);
   border-radius: 3px;
   transition: height .18s var(--ease), top .18s var(--ease);
 }
-#timeline:hover .rail { top: 7.5px; height: 7px; }
+#timeline:hover .rail { top: 6px; height: 10px; }
 #played { position: absolute; left: 0; top: 0; bottom: 0; background: var(--grad); border-radius: 3px; }
 #hover-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255, 255, 255, .14); border-radius: 3px; opacity: 0; transition: opacity .15s; }
 #timeline:hover #hover-fill { opacity: 1; }
@@ -523,9 +523,9 @@ body.idle #osd { top: 20px; }
 }
 #handle {
   position: absolute;
-  top: 4px;
-  width: 14px; height: 14px;
-  margin-left: -7px;
+  top: 3px;
+  width: 16px; height: 16px;
+  margin-left: -8px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(var(--accent-rgb), .35), 0 2px 8px rgba(0, 0, 0, .5);

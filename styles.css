@@ -1428,3 +1428,8 @@ body.winter .empty-glow { background: radial-gradient(closest-side, rgba(76, 160
 }
 body.no-motion .flake { display: none; }
 #splash .snow .flake { color: #dcefff; }
+
+/* settings: a labelled range slider (e.g. window opacity) */
+.range-row { display: flex; align-items: center; gap: 12px; min-width: 200px; }
+.range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.range-val { font-size: 13px; color: var(--soft); min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }

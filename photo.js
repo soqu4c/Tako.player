@@ -11,6 +11,9 @@ const ph = {
 };
 
 const phEl = {};
+// a crop box covering the whole image: always visible, so cropping is "drag the handles"
+function fullCrop() { ph.crop = { x: 0, y: 0, w: ph.canvas.width, h: ph.canvas.height }; }
+function cropIsFull() { const r = ph.crop, c = ph.canvas; return r && c && r.x === 0 && r.y === 0 && r.w === c.width && r.h === c.height; }
 function phInit() {
   for (const id of ['photo', 'ph-canvas', 'ph-crop', 'ph-stage', 'ph-wrap', 'ph-name', 'ph-size', 'ph-frames']) {
     phEl[id] = document.getElementById(id);
@@ -29,7 +32,7 @@ function openPhoto(file) {
     c.getContext('2d').drawImage(img, 0, 0);
     ph.src = file;
     ph.canvas = c;
-    ph.crop = null;
+    fullCrop();
     phEl['ph-name'].textContent = api.basename(file);
     phEl['ph-frames'].hidden = !/\.gif$/i.test(file);
     phEl['photo'].hidden = false;
@@ -106,8 +109,8 @@ function phPointerDown(e) {
   const start = ph.crop ? { x: ph.crop.x, y: ph.crop.y, w: ph.crop.w, h: ph.crop.h } : null;
   const x0 = px(), y0 = py();
   let mode;
-  if (handle === 'move') mode = 'move';
-  else if (handle) mode = handle;
+  if (handle === 'move' && !cropIsFull()) mode = 'move';
+  else if (handle && handle !== 'move') mode = handle;
   else { mode = 'new'; ph.crop = { x: x0, y: y0, w: 0, h: 0 }; }
   phEl['ph-wrap'].setPointerCapture(e.pointerId);
   const move = ev => {
@@ -133,7 +136,7 @@ function phPointerDown(e) {
   const up = () => {
     phEl['ph-wrap'].removeEventListener('pointermove', move);
     phEl['ph-wrap'].removeEventListener('pointerup', up);
-    if (ph.crop && (ph.crop.w < 8 || ph.crop.h < 8)) ph.crop = null;
+    if (ph.crop && (ph.crop.w < 8 || ph.crop.h < 8)) fullCrop();
     drawCrop();
   };
   phEl['ph-wrap'].addEventListener('pointermove', move);
@@ -143,8 +146,8 @@ function phPointerDown(e) {
 // ---------- edits
 
 function applyCrop() {
-  if (!ph.crop) {
-    toast('Выделите область рамкой на картинке');
+  if (!ph.crop || cropIsFull()) {
+    toast('Потяните уголки рамки внутрь, чтобы обрезать');
     return;
   }
   const r = ph.crop;
@@ -153,7 +156,7 @@ function applyCrop() {
   c.height = Math.round(r.h);
   c.getContext('2d').drawImage(ph.canvas, Math.round(r.x), Math.round(r.y), c.width, c.height, 0, 0, c.width, c.height);
   ph.canvas = c;
-  ph.crop = null;
+  fullCrop();
   phRender();
 }
 
@@ -167,7 +170,7 @@ function rotate(dir) {
   g.rotate(dir * Math.PI / 2);
   g.drawImage(src, -src.width / 2, -src.height / 2);
   ph.canvas = c;
-  ph.crop = null;
+  fullCrop();
   phRender();
 }
 
@@ -181,7 +184,7 @@ function flip(horizontal) {
   g.scale(horizontal ? -1 : 1, horizontal ? 1 : -1);
   g.drawImage(src, 0, 0);
   ph.canvas = c;
-  ph.crop = null;
+  fullCrop();
   phRender();
 }
 
@@ -190,7 +193,7 @@ function flip(horizontal) {
 // the working image, with a pending crop applied, as a data URL in the wanted format
 function phData(format) {
   let c = ph.canvas;
-  if (ph.crop) {
+  if (ph.crop && !cropIsFull()) {
     const r = ph.crop;
     const t = document.createElement('canvas');
     t.width = Math.round(r.w);

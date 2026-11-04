@@ -45,6 +45,7 @@
       "i18n.js",
       "changelog.js",
       "editor.js",
+      "photo.js",
       "editor.css",
       "vendor/**",
       "index.html",

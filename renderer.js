@@ -181,11 +181,14 @@ api.onProgress(({ jobId, value }) => {
 // ---------- playlist
 
 const SUB_RE = /\.(srt|vtt|ass|ssa)$/i;
+const PHOTO_RE = /\.(png|jpe?g|jfif|webp|bmp|gif|avif)$/i;
 
 // Opening media replaces what was open. Several files (or a folder) become the list ⏮ ⏭ step
 // through; a single file brings its folder neighbours along, so ⏮ ⏭ work for it too.
 // Subtitle files attach to the video already playing.
 async function addFiles(paths) {
+  // a single image goes to the photo editor, not the video player
+  if (paths.length === 1 && PHOTO_RE.test(paths[0]) && typeof openPhoto === 'function') return openPhoto(paths[0]);
   const subs = paths.filter(p => SUB_RE.test(p));
   const seen = new Set();
   const media = paths.filter(p => !SUB_RE.test(p) && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));

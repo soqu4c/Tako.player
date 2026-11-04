@@ -1556,6 +1556,59 @@ ipcMain.handle('screenshot', async (_e, { file, time }) => {
 
 // ---------- drawing on a frame: the exact frame, then saving or copying the finished picture
 
+
+// ---------- photo editor: save an edited image, and pull frames out of a GIF
+//
+// The editor does crop/rotate/resize in the page on a canvas and hands over the result as a
+// data URL. PNG/JPG/WEBP are already encoded by the canvas and just written; GIF goes through
+// ffmpeg with a proper palette so it does not look muddy.
+const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'avif', 'jfif'];
+
+ipcMain.handle('photo-export', async (_e, { data, format, source }) => {
+  const m = /^data:image\/[\w+.-]+;base64,/.exec(String(data));
+  if (!m) throw new Error(L('неверная картинка', 'bad image'));
+  const bytes = Buffer.from(data.slice(m[0].length), 'base64');
+  const dir = source ? path.dirname(source) : app.getPath('pictures');
+  const base = (source ? path.parse(source).name : 'image');
+  const r = await dialog.showSaveDialog(win, {
+    defaultPath: path.join(dir, base + '.' + format),
+    filters: [{ name: format.toUpperCase(), extensions: [format] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  if (format === 'gif') {
+    const tmp = path.join(app.getPath('temp'), 'tako-img-' + Date.now() + '.png');
+    fs.writeFileSync(tmp, bytes);
+    try {
+      await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-i', tmp,
+        '-vf', 'split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a', r.filePath]);
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
+  } else {
+    fs.writeFileSync(r.filePath, bytes);
+  }
+  return r.filePath;
+});
+
+// Every frame of a GIF (or other animation) written as PNGs into a folder the user picks
+ipcMain.handle('gif-extract', async (_e, file) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], defaultPath: path.dirname(file) });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const base = path.parse(file).name.replace(/[\/:*?"<>|]+/g, '_');
+  await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, path.join(r.filePaths[0], base + '_%03d.png')]);
+  const count = fs.readdirSync(r.filePaths[0]).filter(n => n.startsWith(base + '_') && n.endsWith('.png')).length;
+  return { dir: r.filePaths[0], count };
+});
+
+// Pick an image to edit
+ipcMain.handle('open-image', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: L('Картинки', 'Images'), extensions: IMAGE_EXT }, { name: L('Все файлы', 'All files'), extensions: ['*'] }],
+  });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+});
+
 ipcMain.handle('grab-frame', async (_e, { file, time }) => {
   const png = await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-ss', Math.max(0, time).toFixed(3), '-i', file,
     '-map', '0:v:0', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', 'pipe:1']);

@@ -27,6 +27,7 @@
     <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="5" x2="5" y2="19"/><polyline points="16 18 10 12 16 6"/></symbol>
     <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="19" y2="19"/><polyline points="8 18 14 12 8 6"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15l-5-5L5 21"/></symbol>
     <symbol id="i-file-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
     <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon fill="currentColor" points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
@@ -122,6 +123,7 @@
               <button id="btn-open-big" class="btn accent"><svg class="i"><use href="#i-file-plus"/></svg>Открыть файлы</button>
               <button id="btn-open-folder-big" class="btn"><svg class="i"><use href="#i-folder"/></svg>Открыть папку</button>
               <button id="btn-open-link-big" class="btn" title="YouTube, Twitch и другие сайты (Ctrl+U, или просто Ctrl+V)"><svg class="i"><use href="#i-link"/></svg>Ссылка</button>
+              <button id="btn-photo-big" class="btn" title="Открыть картинку: обрезать, повернуть, PNG ↔ GIF"><svg class="i"><use href="#i-image"/></svg>Фото</button>
               <button id="btn-go-library" class="btn ghost"><svg class="i"><use href="#i-grid"/></svg>Библиотека</button>
             </div>
             <button id="btn-news" class="news-link" hidden><svg class="i"><use href="#i-refresh"/></svg><span></span></button>
@@ -829,11 +831,46 @@
   </div>
 </div>
 
+<div id="photo" hidden>
+  <div class="ph-bar">
+    <b class="ph-title" id="ph-name">Фоторедактор</b>
+    <span class="ph-flex"></span>
+    <button id="ph-open" class="btn small">Открыть…</button>
+    <button id="ph-close" class="btn small ghost">Закрыть</button>
+  </div>
+  <div class="ph-stage" id="ph-stage">
+    <div class="ph-wrap" id="ph-wrap">
+      <canvas id="ph-canvas"></canvas>
+      <div id="ph-crop" hidden>
+        <i class="ph-move" data-h="move"></i>
+        <i class="ph-h nw" data-h="nw"></i><i class="ph-h n" data-h="n"></i><i class="ph-h ne" data-h="ne"></i>
+        <i class="ph-h w" data-h="w"></i><i class="ph-h e" data-h="e"></i>
+        <i class="ph-h sw" data-h="sw"></i><i class="ph-h s" data-h="s"></i><i class="ph-h se" data-h="se"></i>
+      </div>
+    </div>
+  </div>
+  <div class="ph-tools">
+    <button id="ph-rotl" class="ph-tool" title="Повернуть влево">&#10226;</button>
+    <button id="ph-rotr" class="ph-tool" title="Повернуть вправо">&#10227;</button>
+    <button id="ph-fliph" class="ph-tool" title="Отразить по горизонтали">&#8646;</button>
+    <button id="ph-flipv" class="ph-tool" title="Отразить по вертикали">&#8645;</button>
+    <button id="ph-cropbtn" class="btn small">Обрезать</button>
+    <span class="ph-size" id="ph-size"></span>
+    <button id="ph-reset" class="btn small ghost">Сбросить</button>
+    <span class="ph-flex"></span>
+    <span class="ph-save-label">Сохранить:</span>
+    <button id="ph-png" class="btn small accent">PNG</button>
+    <button id="ph-jpg" class="btn small">JPG</button>
+    <button id="ph-gif" class="btn small">GIF</button>
+    <button id="ph-frames" class="btn small" hidden>Кадры в&nbsp;PNG</button>
+  </div>
+</div>
 <script src="vendor/hls.min.js"></script>
 <script src="i18n.js"></script>
 <script src="renderer.js"></script>
 <script src="changelog.js"></script>
 <script src="ui.js"></script>
 <script src="editor.js"></script>
+<script src="photo.js"></script>
 </body>
 </html>

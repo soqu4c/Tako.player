@@ -284,7 +284,6 @@ function setupUpdates() {
   updater.checkForUpdates().catch(() => {});
 }
 
-ipcMain.handle('set-opacity', (_e, v) => { if (win) win.setOpacity(Math.min(1, Math.max(0.3, Number(v) || 1))); });
 ipcMain.handle('startup-gate', () => startupGate);
 ipcMain.handle('startup-skip', () => releaseStartup());
 

@@ -435,15 +435,14 @@ body.audio-only #audio-art { display: flex; }
 
 #controls {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  padding: 3px 12px 6px;
-  background: var(--glass);
-  border: 1px solid var(--line-2);
-  border-radius: 16px;
-  backdrop-filter: blur(22px) saturate(1.5);
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .7);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 46px 22px 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, .82) 0%, rgba(0, 0, 0, .55) 40%, rgba(0, 0, 0, .18) 75%, transparent 100%);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   z-index: 4;
   transition: opacity .35s var(--ease), transform .45s var(--ease);
 }
@@ -486,7 +485,7 @@ body.idle #controls, body:not(.loaded) #controls { opacity: 0; transform: transl
 #controls #timeline { margin-right: 32px; }
 body.ctl-mini .collapse .i { transform: rotate(180deg); }
 body.ctl-mini .row.main { display: none; }
-body.ctl-mini #controls { padding: 2px 12px 3px; }
+body.ctl-mini #controls { padding: 26px 12px 5px; }
 /* folding also tucks the trim panel away; the selection itself stays */
 body.ctl-mini.trim-open #trim-wrap { grid-template-rows: 0fr; }
 body.ctl-mini.trim-open .trim-panel { margin-top: 0; padding: 0 8px; border-color: transparent; }
@@ -887,7 +886,7 @@ body.drawing #controls { display: none; }
 
 /* ---------- fullscreen */
 
-#player:fullscreen #controls { left: 32px; right: 32px; bottom: 28px; }
+#player:fullscreen #controls { left: 0; right: 0; bottom: 0; padding: 60px 40px 22px; }
 
 
 /* ---------- library */
@@ -1323,7 +1322,7 @@ body.mini #titlebar .logo { width: 16px; height: 16px; }
 body.mini .app-name, body.mini .update-pill { display: none; }
 body.mini #title-file { margin-left: 0; font-size: 12px; }
 body.mini #rail, body.mini #trim-wrap, body.mini #btn-collapse, body.mini #drag-tray { display: none; }
-body.mini #controls { left: 6px; right: 6px; bottom: 6px; padding: 2px 8px 4px; border-radius: 12px; }
+body.mini #controls { left: 6px; right: 6px; bottom: 6px; padding: 2px 8px 4px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(22px) saturate(1.5); }
 body.mini #controls #timeline { margin-right: 0; }
 body.mini .row.main .group.right > :not(#btn-pip), body.mini #btn-back, body.mini #btn-fwd, body.mini .vol { display: none; }
 body.mini #time { font-size: 11px; }

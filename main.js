@@ -72,6 +72,10 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const extOf = p => path.extname(p).slice(1).toLowerCase();
+// A media file by extension, but not a TypeScript declaration (.d.ts ends in .ts)
+const isMedia = name => MEDIA_EXT.includes(extOf(name)) && !/\.d\.ts$/i.test(name);
+// Folders a media scan never descends into (dependency and system trees)
+const SKIP_DIRS = new Set(['node_modules', '$recycle.bin', 'system volume information', 'windows']);
 
 // Media files in dir and its subfolders: files first, then subfolders, in natural name order
 function listMedia(dir, depth = 0) {
@@ -82,10 +86,10 @@ function listMedia(dir, depth = 0) {
     return [];
   }
   entries.sort((a, b) => collator.compare(a.name, b.name));
-  const files = entries.filter(e => e.isFile() && MEDIA_EXT.includes(extOf(e.name))).map(e => path.join(dir, e.name));
+  const files = entries.filter(e => e.isFile() && isMedia(e.name)).map(e => path.join(dir, e.name));
   if (depth < 8) {
     for (const e of entries) {
-      if (e.isDirectory() && !/^[.$]/.test(e.name)) files.push(...listMedia(path.join(dir, e.name), depth + 1));
+      if (e.isDirectory() && !/^[.$]/.test(e.name) && !SKIP_DIRS.has(e.name.toLowerCase())) files.push(...listMedia(path.join(dir, e.name), depth + 1));
     }
   }
   return files;
@@ -105,7 +109,7 @@ function expandPaths(paths) {
 function argPaths(argv) {
   // When run from source, argv[1] is the app folder itself
   const args = argv.slice(process.defaultApp ? 2 : 1).filter(a => !a.startsWith('--') && fs.existsSync(a));
-  return expandPaths(args).filter(a => MEDIA_EXT.includes(extOf(a)) || SUB_EXT.includes(extOf(a)));
+  return expandPaths(args).filter(a => isMedia(a) || SUB_EXT.includes(extOf(a)));
 }
 
 function createWindow() {
@@ -1042,7 +1046,7 @@ ipcMain.handle('folder-media', (_e, file) => {
   const dir = path.dirname(file);
   try {
     return fs.readdirSync(dir, { withFileTypes: true })
-      .filter(e => e.isFile() && MEDIA_EXT.includes(extOf(e.name)))
+      .filter(e => e.isFile() && isMedia(e.name))
       .map(e => e.name)
       .sort(collator.compare)
       .map(name => path.join(dir, name));

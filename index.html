@@ -97,6 +97,7 @@
     <button id="nav-player" class="rail-btn active" data-tip="Плеер"><svg class="i"><use href="#i-screen"/></svg></button>
     <button id="nav-library" class="rail-btn" data-tip="Библиотека (Ctrl+L)"><svg class="i"><use href="#i-grid"/></svg></button>
     <button id="nav-editor" class="rail-btn" data-tip="Редактор (бета)"><svg class="i"><use href="#i-film"/></svg><span class="beta-dot">β</span></button>
+    <button id="nav-photos" class="rail-btn" data-tip="Фото"><svg class="i"><use href="#i-image"/></svg></button>
     <span class="rail-sep"></span>
     <button id="btn-open" class="rail-btn" data-tip="Открыть файлы (Ctrl+O)"><svg class="i"><use href="#i-file-plus"/></svg></button>
     <span class="rail-spacer"></span>
@@ -315,6 +316,25 @@
       </div>
     </section>
 
+    <section id="view-photos" class="view">
+      <header class="lib-head">
+        <div>
+          <h1>Фото</h1>
+          <p id="photos-count"></p>
+        </div>
+        <div class="lib-tools">
+          <button id="photos-refresh" class="icon" title="Обновить"><svg class="i"><use href="#i-refresh"/></svg></button>
+          <button id="photos-add" class="btn accent"><svg class="i"><use href="#i-plus"/></svg>Добавить папку</button>
+        </div>
+      </header>
+      <div id="photos-body"></div>
+      <div id="photos-empty" hidden>
+        <div class="lib-empty-icon"><svg class="i"><use href="#i-image"/></svg></div>
+        <h2>Здесь будут ваши картинки</h2>
+        <p>Добавьте папку с фото — PNG, JPG, GIF и другими. Нажмите на снимок, чтобы открыть в фоторедакторе.</p>
+        <button id="photos-add2" class="btn accent"><svg class="i"><use href="#i-plus"/></svg>Добавить папку</button>
+      </div>
+    </section>
     <section id="view-editor" class="view">
       <div class="ed">
         <div class="ed-top">

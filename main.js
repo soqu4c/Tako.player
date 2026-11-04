@@ -642,6 +642,32 @@ ipcMain.handle('pick-folder', async () => {
   return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
 });
 
+// Image files in dir and its subfolders (same walk as listMedia, image extensions)
+function listImages(dir, depth = 0) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
+  entries.sort((a, b) => collator.compare(a.name, b.name));
+  const files = entries.filter(e => e.isFile() && IMAGE_EXT.includes(extOf(e.name))).map(e => path.join(dir, e.name));
+  if (depth < 8) {
+    for (const e of entries) {
+      if (e.isDirectory() && !/^[.$]/.test(e.name) && !SKIP_DIRS.has(e.name.toLowerCase())) files.push(...listImages(path.join(dir, e.name), depth + 1));
+    }
+  }
+  return files;
+}
+
+ipcMain.handle('photos-scan', (_e, folders) => folders.map(dir => ({
+  dir,
+  name: path.basename(dir) || dir,
+  exists: fs.existsSync(dir),
+  files: listImages(dir).flatMap(fp => {
+    try {
+      const st = fs.statSync(fp);
+      return [{ path: fp, name: path.basename(fp), size: st.size, mtime: st.mtimeMs }];
+    } catch { return []; }
+  }),
+})));
+
 ipcMain.handle('library-scan', (_e, folders) => folders.map(dir => ({
   dir,
   name: path.basename(dir) || dir,

@@ -256,3 +256,83 @@ if (phBig) phBig.onclick = async () => {
   const f = await api.openImage();
   if (f) openPhoto(f);
 };
+
+// ---------- the Photos tab: a gallery of images from chosen folders
+
+const photos = { folders: recall('photoFolders', []), data: [], loaded: false };
+
+async function loadPhotos() {
+  photos.loaded = true;
+  try {
+    photos.data = photos.folders.length ? await api.photosScan(photos.folders) : [];
+  } catch {
+    photos.data = [];
+  }
+  renderPhotos();
+}
+
+function renderPhotos() {
+  const body = document.getElementById('photos-body');
+  const any = photos.folders.length > 0;
+  const total = photos.data.reduce((n, f) => n + f.files.length, 0);
+  document.getElementById('photos-empty').hidden = any;
+  body.hidden = !any;
+  document.getElementById('photos-count').textContent = any ? total + ' фото' : '';
+  body.innerHTML = '';
+  for (const folder of photos.data) {
+    const sec = document.createElement('div');
+    sec.className = 'photos-folder';
+    const head = document.createElement('div');
+    head.className = 'photos-fhead';
+    const name = document.createElement('b');
+    name.textContent = folder.name + (folder.exists ? '' : ' (нет на диске)');
+    const cnt = document.createElement('span');
+    cnt.className = 'photos-fn';
+    cnt.textContent = folder.files.length;
+    const rm = document.createElement('button');
+    rm.className = 'icon sm photos-frm';
+    rm.title = 'Убрать папку из «Фото»';
+    rm.textContent = '✕';
+    rm.onclick = () => {
+      photos.folders = photos.folders.filter(d => d !== folder.dir);
+      store('photoFolders', photos.folders);
+      loadPhotos();
+    };
+    head.append(name, cnt, rm);
+    sec.append(head);
+    const grid = document.createElement('div');
+    grid.className = 'photos-grid';
+    for (const im of folder.files) {
+      const card = document.createElement('button');
+      card.className = 'photo-card';
+      card.title = im.name;
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.src = api.toUrl(im.path);
+      const nm = document.createElement('span');
+      nm.className = 'photo-name';
+      nm.textContent = im.name;
+      card.append(img, nm);
+      card.onclick = () => openPhoto(im.path);
+      grid.append(card);
+    }
+    sec.append(grid);
+    body.append(sec);
+  }
+}
+
+async function addPhotoFolder() {
+  const dir = await api.pickFolder();
+  if (!dir) return;
+  if (!photos.folders.some(d => d.toLowerCase() === dir.toLowerCase())) {
+    photos.folders.push(dir);
+    store('photoFolders', photos.folders);
+  }
+  await loadPhotos();
+}
+
+document.getElementById('nav-photos').onclick = () => showView('photos');
+document.getElementById('photos-add').onclick = addPhotoFolder;
+document.getElementById('photos-add2').onclick = addPhotoFolder;
+document.getElementById('photos-refresh').onclick = loadPhotos;
+// after saving an edited image back into a watched folder, refresh the gallery next time it opens

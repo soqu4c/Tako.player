@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('api', {
   photoExport: opts => ipcRenderer.invoke('photo-export', opts),
   gifExtract: file => ipcRenderer.invoke('gif-extract', file),
   openImage: () => ipcRenderer.invoke('open-image'),
+  photosScan: folders => ipcRenderer.invoke('photos-scan', folders),
   copyImage: data => ipcRenderer.invoke('copy-image', data),
   saveDialog: opts => ipcRenderer.invoke('save-dialog', opts),
   exportClip: opts => ipcRenderer.invoke('export', opts),

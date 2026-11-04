@@ -426,12 +426,13 @@ function moveIndicator() {
 function showView(v) {
   currentView = v;
   document.body.dataset.view = v;
-  for (const name of ['player', 'library', 'editor']) {
+  for (const name of ['player', 'library', 'editor', 'photos']) {
     $('#view-' + name).classList.toggle('active', v === name);
     $('#nav-' + name).classList.toggle('active', v === name);
   }
   moveIndicator();
   if (v === 'library' && !lib.loaded) loadLibrary();
+  if (v === 'photos' && typeof loadPhotos === 'function' && !photos.loaded) loadPhotos();
   updateMini();
   poke();
 }

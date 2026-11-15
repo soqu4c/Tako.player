@@ -696,8 +696,11 @@ const WAVE_RATE = 2000;
 const waveJobs = new Map(); // file|points -> { proc, indexes, peaks: { index: [] }, done, waiters: Map(id -> { sender, index }) }
 const waveWaiters = new Map(); // id -> job
 
-const waveCache = (file, st, index, points) => path.join(thumbDir(),
-  crypto.createHash('sha1').update([file, st.size, st.mtimeMs, index, points, 'wave1'].join('|')).digest('hex').slice(0, 16) + '.wave.json');
+// one canonical waveform per file+track, shared by the player and the editor so the file is
+// read at most once (the old per-points caches, 'wave1', are left behind)
+const canonPoints = dur => Math.min(40000, Math.max(2000, Math.round(dur * 20)));
+const waveCache = (file, st, index) => path.join(thumbDir(),
+  crypto.createHash('sha1').update([file, st.size, st.mtimeMs, index, 'wave2'].join('|')).digest('hex').slice(0, 16) + '.wave.json');
 
 function startWaveJob(file, st, info, points) {
   const indexes = info.streams.filter(s => s.codec_type === 'audio').map(s => s.index);
@@ -751,7 +754,7 @@ function startWaveJob(file, st, info, points) {
       if (code !== 0 && !frame) return reject(new Error('не удалось прочитать звук'));
       try {
         fs.mkdirSync(thumbDir(), { recursive: true });
-        for (const i of indexes) fs.writeFileSync(waveCache(file, st, i, points), JSON.stringify(job.peaks[i]));
+        for (const i of indexes) fs.writeFileSync(waveCache(file, st, i), JSON.stringify(job.peaks[i]));
       } catch {}
       resolve(job.peaks);
     });
@@ -763,15 +766,15 @@ function startWaveJob(file, st, info, points) {
   return job;
 }
 
-ipcMain.handle('waveform', async (e, { id, file, index, points }) => {
+ipcMain.handle('waveform', async (e, { id, file, index }) => {
   const st = fs.statSync(file);
-  const cacheFile = waveCache(file, st, index, points);
+  const cacheFile = waveCache(file, st, index);
   if (fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-  const jobKey = `${file}|${points}`;
-  let job = waveJobs.get(jobKey);
+  let job = waveJobs.get(file);
   if (!job) {
-    job = startWaveJob(file, st, await probe(file), points);
-    waveJobs.set(jobKey, job);
+    const info = await probe(file);
+    job = startWaveJob(file, st, info, canonPoints(parseFloat(info.format.duration) || 1));
+    waveJobs.set(file, job);
   }
   if (!job.indexes.includes(index)) throw new Error('нет такой дорожки');
   clearTimeout(job.idle);

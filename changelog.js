@@ -3,6 +3,16 @@
 
 const CHANGELOG = [
   {
+    version: '1.4.1',
+    date: '2026-11-15',
+    sections: [
+      [['Исправления', 'Fixes'], [
+        ['Ускорение в плеере снова работает (в 1.4.0 выбор скорости не действовал)', 'Playback speed in the player works again (in 1.4.0 the speed control did nothing)'],
+        ['Меньше нагрузки на диск при редактировании: звуковая волна большого файла читается с диска один раз, а не дважды', 'Less disk load when editing: a large file’s sound waveform is read from disk once instead of twice'],
+      ]],
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-11-04',
     sections: [

@@ -106,7 +106,7 @@ const fadeInOf = c => {
 };
 // The speed of clips with what is linked to them. What came right after each one on its track
 // moves along, so the clip neither covers the next one nor leaves a gap.
-function setSpeed(clips, speed) {
+function setClipSpeed(clips, speed) {
   const group = [...new Set(clips.flatMap(linked))].filter(x => x.track !== 'T1' && !(edMedia(x.media) || {}).image);
   for (const x of group) {
     const oldEnd = clipEnd(x);
@@ -1257,7 +1257,7 @@ function clipMenu(e, c) {
     for (const [k, name] of TRANS) items.push({ icon: 'i-film', label: `${name} с предыдущим клипом (1 с)`, run: put({ kind: k, dur: 1 }) });
     if (c.trans) items.push({ icon: 'i-x', label: 'Убрать переход', run: put(null) });
   }
-  if (sp(c) !== 1) items.push({ icon: 'i-film', label: 'Обычная скорость (100%)', run: () => { edCommit(); setSpeed(sel, 1); edChanged(); } });
+  if (sp(c) !== 1) items.push({ icon: 'i-film', label: 'Обычная скорость (100%)', run: () => { edCommit(); setClipSpeed(sel, 1); edChanged(); } });
   items.push('-',
     { icon: 'i-scissors', label: 'Разрезать по линии времени', run: () => splitClips(sel, ed.t) },
     { icon: 'i-file-plus', label: 'Копировать (Ctrl+C)', run: copySelected },
@@ -1633,7 +1633,7 @@ function renderInspector() {
   if (timed.length) {
     const t0 = timed[0];
     section('time', 'Скорость и переход', rows => {
-      row(rows, 'Скорость', [{ get: () => sp(t0) * 100, set: (x, n) => setSpeed(timed, n / 100), min: 10, max: 1000, step: 5, unit: '%', list: [t0] }]);
+      row(rows, 'Скорость', [{ get: () => sp(t0) * 100, set: (x, n) => setClipSpeed(timed, n / 100), min: 10, max: 1000, step: 5, unit: '%', list: [t0] }]);
       const presets = document.createElement('div');
       presets.className = 'fx-fits';
       for (const v of [25, 50, 100, 200, 400]) {
@@ -1641,7 +1641,7 @@ function renderInspector() {
         b.className = 'btn small ghost';
         b.classList.toggle('on', Math.abs(sp(t0) * 100 - v) < 0.5);
         b.textContent = v + '%';
-        b.onclick = () => { edCommit(); setSpeed(timed, v / 100); edChanged(); };
+        b.onclick = () => { edCommit(); setClipSpeed(timed, v / 100); edChanged(); };
         presets.append(b);
       }
       rows.append(presets);
@@ -1661,7 +1661,7 @@ function renderInspector() {
       if (t0.trans && prev) {
         row(rows, 'Длительность', [{ get: () => (t0.trans ? t0.trans.dur : 1), set: (x, n) => setTrans(timed, { kind: t0.trans.kind, dur: n }), min: 0.1, max: 10, step: 0.1, unit: 'с', list: [t0] }]);
       }
-    }, () => { setSpeed(timed, 1); setTrans(timed, null); });
+    }, () => { setClipSpeed(timed, 1); setTrans(timed, null); });
   }
 
   if (kind === 'text') {
